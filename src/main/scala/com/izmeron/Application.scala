@@ -25,22 +25,17 @@ import com.typesafe.config.ConfigFactory
 object Application extends App {
   import com.izmeron._
 
-  val Path = "./cvs/metal2pipes2.csv"
-  val OrderPath = "./cvs/order.csv"
   val logger = Logger.getLogger("scalaz-stream-csv")
   val LoggerSink = scalaz.stream.sink.lift[Task, (String, Int)](d ⇒ Task.delay(logger.debug(d)))
   val LoggerSink2 = scalaz.stream.sink.lift[Task, Iterable[Result]](list ⇒ Task.delay(logger.debug(s"approximation 2: $list")))
 
-  //args
-  val latch = new CountDownLatch(1)
   val cfg = ConfigFactory.load()
-
   val lenghtThreshold = cfg.getConfig("planner.distribution").getInt("lenghtThreshold")
   val minLenght = cfg.getConfig("planner.distribution").getInt("minLenght")
   val httpPort = cfg.getConfig("planner").getInt("httpPort")
   val path = cfg.getConfig("planner").getString("indexFile")
 
-  val csvSource = scalaz.stream.csv.rowsR[RawCsvLine](Path, ';')
+  val csvSource = scalaz.stream.csv.rowsR[RawCsvLine](path, ';')
     .map { raw ⇒
       Etalon(raw.kd, raw.name, raw.nameMat, raw.marka,
         raw.diam.replaceAll(cvsSpace, empty).toInt,
