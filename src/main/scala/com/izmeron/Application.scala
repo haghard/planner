@@ -15,19 +15,10 @@
 package com.izmeron
 
 import com.izmeron.http.RestServer
-
-import scalaz.concurrent.Task
-import org.apache.log4j.Logger
-import java.util.concurrent.CountDownLatch
-
 import com.typesafe.config.ConfigFactory
 
 object Application extends App {
   import com.izmeron._
-
-  val logger = Logger.getLogger("scalaz-stream-csv")
-  val LoggerSink = scalaz.stream.sink.lift[Task, (String, Int)](d ⇒ Task.delay(logger.debug(d)))
-  val LoggerSink2 = scalaz.stream.sink.lift[Task, Iterable[Result]](list ⇒ Task.delay(logger.debug(s"approximation 2: $list")))
 
   val cfg = ConfigFactory.load()
   val lenghtThreshold = cfg.getConfig("planner.distribution").getInt("lenghtThreshold")

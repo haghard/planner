@@ -24,6 +24,7 @@ trait Planner {
   import com.ambiata.origami.effect.FinalizersException
   import scalaz.{ \/, \/-, -\/ }
   import scalaz.concurrent.Task
+  import scalaz.stream.Process
 
   def log: org.apache.log4j.Logger
 
@@ -51,20 +52,6 @@ trait Planner {
         raw.techComp.replaceAll(cvsSpace, empty).toInt)
     }
 
-  /*private def buildIndex: FoldM[SafeTTask, Etalon, mutable.Map[String, Iterable[RawResult]]] =
-    fromFoldLeft[Etalon, com.izmeron.Index](mutable.Map[String, mutable.Map[String, RawResult]]()) { (acc, c) ⇒
-      val key = s"${c.marka}/${c.diam}/${c.indiam}"
-      acc.get(key).fold { acc += (key -> mutable.Map(c.kd -> RawResult(c.kd, key, c.qOptimal, c.len, c.lenMin, c.tProfit, c.qMin, c.numSect))); () } { map ⇒ map += (c.kd -> RawResult(c.kd, key, c.qOptimal, c.len, c.lenMin, c.tProfit, c.qMin, c.numSect)) }
-      acc
-    }.map { groupedIndex ⇒
-      val inner: Iterable[mutable.Map[String, RawResult]] = groupedIndex.values
-      inner./:(mutable.Map[String, Iterable[RawResult]]()) { (acc, c) ⇒
-        val groups = c.keys.map(k ⇒ mutable.Map(k -> c.values))
-        groups.foreach(_.foreach(kv ⇒ acc += (kv._1 -> kv._2)))
-        acc
-      }
-    }.into[SafeTTask]*/
-
   private def buildIndex: FoldM[SafeTTask, Etalon, mutable.Map[String, RawResult]] =
     fromFoldLeft[Etalon, mutable.Map[String, RawResult]](mutable.Map[String, RawResult]()) { (acc, c) ⇒
       val key = s"${c.marka}/${c.diam}/${c.indiam}"
@@ -75,17 +62,15 @@ trait Planner {
   def createIndex: Task[(Throwable \/ mutable.Map[String, RawResult], Option[FinalizersException])] =
     Task.fork((buildIndex run csvSource).attemptRun)(PlannerEx)
 
-  val P = scalaz.stream.Process
-
   def respond(ord: com.izmeron.Order, index: mutable.Map[String, RawResult]): scalaz.stream.Process[Task, List[Result]] =
-    (P.await(Task.delay(index.get(ord.kd))) { values: Option[RawResult] ⇒
-      values.fold(P.emit(-\/(ord.kd): Or2)) { result: RawResult ⇒ P.emit(\/-(result): Or2) }
+    (Process.await(Task.delay(index.get(ord.kd))) { values: Option[RawResult] ⇒
+      values.fold(Process.emit(-\/(ord.kd): Or)) { result: RawResult ⇒ Process.emit(\/-(result): Or) }
     }).flatMap {
       _.fold({ kd ⇒
         log.error(s"Can't find kd:[$kd] in current index")
-        P.emit(List(Result(ord.kd)))
+        Process.emit(List(Result(ord.kd)))
       }, { seq ⇒
-        P.emit(groupByOptimalNumber(ord, lenghtThreshold, minLenght, log)(seq))
+        Process.emit(groupByOptimalNumber(ord, lenghtThreshold, minLenght, log)(seq))
           .map { list: List[Result] ⇒ redistributeWithin(lenghtThreshold, minLenght, log)(list) }
       })
     }

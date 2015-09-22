@@ -100,25 +100,9 @@ package object izmeron {
       acc
     }.into[SafeTTask]
 
-  import com.ambiata.origami.stream.FoldableProcessM._
-  def buildIndex0: FoldM[SafeTTask, Etalon, mutable.Map[String, Iterable[RawResult]]] =
-    fromFoldLeft[Etalon, com.izmeron.Index](mutable.Map[String, mutable.Map[String, RawResult]]()) { (acc, c) ⇒
-      val key = s"${c.marka}/${c.diam}/${c.indiam}"
-      acc.get(key).fold { acc += (key -> mutable.Map(c.kd -> RawResult(c.kd, key, c.qOptimal, c.len, c.lenMin, c.tProfit, c.qMin, c.numSect))); () } { map ⇒ map += (c.kd -> RawResult(c.kd, key, c.qOptimal, c.len, c.lenMin, c.tProfit, c.qMin, c.numSect)) }
-      acc
-    }.map { groupedIndex ⇒
-      val inner: Iterable[mutable.Map[String, RawResult]] = groupedIndex.values
-      inner./:(mutable.Map[String, Iterable[RawResult]]()) { (acc, c) ⇒
-        val groups = c.keys.map(k ⇒ mutable.Map(k -> c.values))
-        groups.foreach(_.foreach(kv ⇒ acc += (kv._1 -> kv._2)))
-        acc
-      }
-    }.into[SafeTTask]
+  //import com.ambiata.origami.stream.FoldableProcessM._
 
-  type Index = mutable.Map[String, mutable.Map[String, RawResult]]
-  type Or = String \/ Seq[RawResult]
-
-  type Or2 = String \/ RawResult
+  type Or = String \/ RawResult
 
   case class Version(major: Int, minor: Int, bf: Int)
 
