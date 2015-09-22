@@ -17,7 +17,7 @@ class PlanerSpec extends Specification {
               Result("94100.001.007.072", "Сталь 38ХГМ/100/45", length = 170, cLength = 684, cQuantity = 4, optQuantity = 3) :: Nil)
       )
 
-      val actual = redistributeWithinGroup(map, lenghtThreshold, minLenght, log)
+      val actual = distributeWithGroup(map, lenghtThreshold, minLenght, log)
 
       actual("86501.420.001.900") === List(Result("86501.420.001.900", "Сталь 38ХГМ/100/45", length=200, cLength=1200, cQuantity=6, optQuantity =6))
       actual("86501.420.001.900 - 94100.001.007.072") === List(
@@ -44,7 +44,7 @@ class PlanerSpec extends Specification {
           Result("94100.001.007.072", "Сталь 38ХГМ/100/45", length = 170, cLength = 684, cQuantity = 4, optQuantity = 3) :: Nil)
       )
 
-      val actual = redistributeWithinGroup(map, lenghtThreshold, minLenght, log)
+      val actual = distributeWithGroup(map, lenghtThreshold, minLenght, log)
       1 === 1
     }
   }
@@ -59,7 +59,7 @@ class PlanerSpec extends Specification {
           Result("94100.001.007.072", "Сталь 38ХГМ/100/45", length = 170, cLength = 684, cQuantity = 4, optQuantity = 3) :: Nil)
       )
 
-      val actual = redistributeWithinGroup(map, lenghtThreshold, minLenght, log)
+      val actual = distributeWithGroup(map, lenghtThreshold, minLenght, log)
       1 === 1
     }
   }

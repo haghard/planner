@@ -70,22 +70,35 @@ object http {
     def errorResponse[A](error: Throwable): ResponseFunction[A] = errorResponse(error.toString)
   }
 
-  class RestServer(override val path: String, httpPort: Int, override val log: org.apache.log4j.Logger,
-                   override val minLenght: Int, override val lenghtThreshold: Int, val v: Version) {
-    mixin: Planner ⇒
+  class PlannerServer(override val path: String, httpPort: Int,
+                      override val log: org.apache.log4j.Logger,
+                      override val minLenght: Int, override val lenghtThreshold: Int,
+                      val v: Version) { mixin: Planner ⇒
 
     @volatile var http: Option[unfiltered.netty.Server] = None
     private val host = unfiltered.netty.Server.allInterfacesHost
 
-    val engine = new unfiltered.netty.Engine {
+    override val csvProcess: scalaz.stream.Process[Task, Etalon] =
+      scalaz.stream.csv.rowsR[RawCsvLine](path, ';').map { raw ⇒
+        Etalon(raw.kd, raw.name, raw.nameMat, raw.marka,
+          raw.diam.replaceAll(cvsSpace, empty).toInt,
+          raw.len.replaceAll(cvsSpace, empty).toInt,
+          raw.indiam.replaceAll(cvsSpace, empty).toInt,
+          raw.numOptim.replaceAll(cvsSpace, empty).toInt,
+          raw.numMin.replaceAll(cvsSpace, empty).toInt,
+          raw.lenMin.replaceAll(cvsSpace, empty).toInt,
+          raw.numSect.replaceAll(cvsSpace, empty).toInt,
+          raw.numPart.replaceAll(cvsSpace, empty).toInt,
+          raw.techComp.replaceAll(cvsSpace, empty).toInt)
+      }
+
+    private val engine = new unfiltered.netty.Engine {
       override val acceptor = new NioEventLoopGroup(1, new NamedThreadFactory("boss"))
       override val workers = new NioEventLoopGroup(Runtime.getRuntime.availableProcessors() * 2, new NamedThreadFactory("worker"))
       override val channels = new DefaultChannelGroup("Netty Unfiltered Server Channel Group", GlobalEventExecutor.INSTANCE)
     }
 
     override def start = {
-      log.debug(s"★ ★ ★ ★ ★ ★  Start http server on $host:$httpPort  ★ ★ ★ ★ ★ ★")
-
       log.debug("★ ★ ★ ★ ★ ★  Index creation has been started  ★ ★ ★ ★ ★ ★")
       createIndex.runAsync {
         case \/-((\/-(index), None)) ⇒
@@ -99,6 +112,7 @@ object http {
                 log.debug("★ ★ ★ ★ ★ ★  Shutdown server  ★ ★ ★ ★ ★ ★")
               }).start()
           }
+          log.debug(s"★ ★ ★ ★ ★ ★  Http server started on $host:$httpPort  ★ ★ ★ ★ ★ ★")
         case \/-((-\/(ex), None)) ⇒
           log.error(s"Error while building index: ${ex.getMessage}")
           System.exit(-1)
@@ -112,7 +126,7 @@ object http {
   }
 
   @Sharable
-  final class HttpNettyHandler(server: RestServer with Planner,
+  final class HttpNettyHandler(server: PlannerServer with Planner,
                                index: mutable.Map[String, RawResult],
                                minLenght: Int, lenghtThreshold: Int) extends async.Plan
       with ServerErrorResponse with AsyncContext {
@@ -124,8 +138,11 @@ object http {
     import scalaz.std.AllInstances._
 
     implicit val M = scalaz.Monoid[List[Result]]
+    val limit = Runtime.getRuntime.availableProcessors()
     implicit val EX = scalaz.concurrent.Strategy.Executor(PlannerEx)
-    val LoggerSink = scalaz.stream.sink.lift[Task, Iterable[Result]] { list ⇒ Task.delay(server.log.debug(s"output: $list")) }
+    val LoggerSink = scalaz.stream.sink.lift[Task, Iterable[Result]] { list ⇒
+      Task.delay(server.log.debug(s"Order-line output: $list"))
+    }
 
     override def intent: Intent = {
       case req ⇒
@@ -140,13 +157,12 @@ object http {
           //http POST http://127.0.0.1:9001/orders < ./cvs/order.csv
           case POST(Path("/orders")) ⇒
             forkTask {
-              (merge.mergeN(rowsR[Order](req.inputStream, ';').map(server.respond(_, index)))(EX) observe LoggerSink)
+              (merge.mergeN(limit)(rowsR[Order](req.inputStream, ';').map(server.plan(_, index)))(EX) observe LoggerSink)
                 .map(list ⇒ scala.collection.immutable.Map(list.head.groupKey -> list))
                 .foldMonoid
-                .map(redistributeWithinGroup(_, lenghtThreshold, minLenght, server.log))
+                .map(distributeWithGroup(_, lenghtThreshold, minLenght, server.log))
                 .runLast.map { _.fold(errorResponse("empty"))(map ⇒ textResponse(map.mkString(";") + END)) }
             }
-
           case invalid ⇒
             responder.respond(errorResponse(s"Invalid request: ${invalid.method} ${invalid.uri}"))
         }

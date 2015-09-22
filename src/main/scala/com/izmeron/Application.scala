@@ -14,11 +14,10 @@
 
 package com.izmeron
 
-import com.izmeron.http.RestServer
+import com.izmeron.http.PlannerServer
 import com.typesafe.config.ConfigFactory
 
 object Application extends App {
-  import com.izmeron._
 
   val cfg = ConfigFactory.load()
   val lenghtThreshold = cfg.getConfig("planner.distribution").getInt("lenghtThreshold")
@@ -26,21 +25,7 @@ object Application extends App {
   val httpPort = cfg.getConfig("planner").getInt("httpPort")
   val path = cfg.getConfig("planner").getString("indexFile")
 
-  val csvSource = scalaz.stream.csv.rowsR[RawCsvLine](path, ';')
-    .map { raw ⇒
-      Etalon(raw.kd, raw.name, raw.nameMat, raw.marka,
-        raw.diam.replaceAll(cvsSpace, empty).toInt,
-        raw.len.replaceAll(cvsSpace, empty).toInt,
-        raw.indiam.replaceAll(cvsSpace, empty).toInt,
-        raw.numOptim.replaceAll(cvsSpace, empty).toInt,
-        raw.numMin.replaceAll(cvsSpace, empty).toInt,
-        raw.lenMin.replaceAll(cvsSpace, empty).toInt,
-        raw.numSect.replaceAll(cvsSpace, empty).toInt,
-        raw.numPart.replaceAll(cvsSpace, empty).toInt,
-        raw.techComp.replaceAll(cvsSpace, empty).toInt)
-    }
-
-  val server = new RestServer(path, httpPort, org.apache.log4j.Logger.getLogger("planner-server"),
+  val server = new PlannerServer(path, httpPort, org.apache.log4j.Logger.getLogger("planner-server"),
     minLenght, lenghtThreshold, Version(0, 0, 1)) with Planner
   server.start
 

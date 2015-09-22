@@ -19,7 +19,6 @@ import java.util.concurrent.Executors._
 import scalaz.\/
 
 package object izmeron {
-  import scalaz.std.AllInstances._
   import scala.collection.mutable
   import com.ambiata.origami.FoldM
   import com.ambiata.origami._, Origami._
@@ -28,10 +27,11 @@ package object izmeron {
   import java.util.concurrent.ThreadFactory
   import java.util.concurrent.atomic.AtomicInteger
 
+  type Or = String \/ RawResult
   val empty = ""
   val cvsSpace = 160.toChar.toString
 
-  val PlannerEx = newFixedThreadPool(Runtime.getRuntime.availableProcessors() / 2, new NamedThreadFactory("planner"))
+  val PlannerEx = newFixedThreadPool(Runtime.getRuntime.availableProcessors(), new NamedThreadFactory("planner"))
 
   case class Order(kd: String, quantity: Int)
   implicit val rowReader0 = RowReader(rec ⇒ Order(rec(0), rec(1).toInt))
@@ -66,19 +66,8 @@ package object izmeron {
       s"[$kd - $groupKey; length:$length; cLength:$cLength; cQuantity:$cQuantity; optQuantity:$optQuantity]"
   }
 
-  case class GroupedResult(groupKey: String, inner: List[Result] = Nil) {
-    override def toString =
-      s"[$groupKey]: ${inner.mkString(";")}"
-  }
-
-  case class DebugLine(marka: String, diam: Int, indiam: Int, lenMin: Int, numSect: Int, numPart: Int, techComp: Int)
-
-  case class RawResult(kd: String, groupKey: String, qOptimal: Int, lenght: Int, minLenght: Int, techProfit: Int, minQuantity: Int, multiplicity: Int) {
-    def length(numInOrder: Int, log: org.apache.log4j.Logger) = {
-      log.debug(s"((${minLenght} - ${techProfit}) / (${minQuantity} / ${multiplicity})) * (${numInOrder} / ${multiplicity}) + ${techProfit} + ((${numInOrder} / ${multiplicity}) - 1) * 2 + 4")
-      ((minLenght - techProfit) / (minQuantity / multiplicity)) * (numInOrder / multiplicity) + techProfit + ((numInOrder / multiplicity) - 1) * 2 + 4
-    }
-  }
+  case class RawResult(kd: String, groupKey: String, qOptimal: Int, lenght: Int, minLenght: Int, techProfit: Int,
+                       minQuantity: Int, multiplicity: Int)
 
   final class NamedThreadFactory(var name: String) extends ThreadFactory {
     private def namePrefix = name + "-thread"
@@ -89,25 +78,7 @@ package object izmeron {
       s"$namePrefix-${threadNumber.getAndIncrement()}", 0L)
   }
 
-  def groupBy3: FoldM[SafeTTask, Etalon, Map[String, Int]] =
-    fromMonoidMap { line: Etalon ⇒ Map(s"${line.marka}/${line.diam}/${line.indiam}" -> 1) }
-      .into[SafeTTask]
-
-  def groupBy3_0: FoldM[SafeTTask, Etalon, mutable.Map[String, Int]] =
-    fromFoldLeft[Etalon, mutable.Map[String, Int]](mutable.Map[String, Int]().withDefaultValue(0)) { (acc, c) ⇒
-      val key = s"${c.marka}/${c.diam}/${c.indiam}"
-      acc += (key -> (acc(key) + 1))
-      acc
-    }.into[SafeTTask]
-
-  //import com.ambiata.origami.stream.FoldableProcessM._
-
-  type Or = String \/ RawResult
-
   case class Version(major: Int, minor: Int, bf: Int)
-
-  def foldCount_Plus: FoldM[SafeTTask, Etalon, (Int, Int)] =
-    ((count[Etalon] observe Log4jSink) <*> plusBy[Etalon, Int](_.diam)).into[SafeTTask]
 
   def Log4jSink: SinkM[scalaz.Id.Id, Etalon] = new FoldM[scalaz.Id.Id, Etalon, Unit] {
     private val name = "origami-fold-logger"
@@ -124,8 +95,8 @@ package object izmeron {
       s.debug(s"$name is being completed")
   }
 
-  def redistributeWithinGroup(group: collection.immutable.Map[String, List[Result]],
-                              threshold: Int, minLenght: Int, log: org.apache.log4j.Logger): mutable.Map[String, List[Result]] = {
+  def distributeWithGroup(group: collection.immutable.Map[String, List[Result]],
+                          threshold: Int, minLenght: Int, log: org.apache.log4j.Logger): mutable.Map[String, List[Result]] = {
     val gMap = group.values.flatten./:(collection.mutable.Map[String, List[Result]]()) { (map, c) ⇒
       if ((c.kd ne null) && (c.kd.length > 0))
         map += (c.kd -> (c :: map.getOrElse(c.kd, List.empty[Result])))
@@ -212,14 +183,13 @@ package object izmeron {
     result
   }
 
-  def redistributeWithin(threshold: Int, minLenght: Int, log: org.apache.log4j.Logger)(list: List[Result]): List[Result] = {
+  def distributeWithinGroup(threshold: Int, minLenght: Int, log: org.apache.log4j.Logger)(list: List[Result]): List[Result] = {
     val result = if (list.size > 1 && (list.minBy(_.cQuantity).cQuantity != list.head.optQuantity)) {
+      var cnt = 0
+      var ind = 0
       var min = list.minBy(_.cQuantity)
       val completed = list.filter(_ != min).toBuffer
 
-      //up or down add to biggest
-      var cnt = 0
-      var ind = 0
       while (threshold - completed(ind).cLength > minLenght && min.cQuantity > 0) {
         val candidate = completed(cnt)
         val (credited, debited) = Result.redistribute(min, candidate)
@@ -232,7 +202,7 @@ package object izmeron {
       if (min.cQuantity > 0) (completed.+:(min)).toList else completed.toList
     } else list
 
-    if (list.size > 0) log.debug(s"2 - ${list.head.kd} - ${list.head.groupKey} redistributeWithin: $result")
+    if (list.size > 0) log.debug(s"2 - ${list.head.kd} - ${list.head.groupKey} distributeWithinGroup: $result")
     revisitSum(result)
   }
 
