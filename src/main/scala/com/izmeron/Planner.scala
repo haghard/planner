@@ -78,7 +78,7 @@ trait Planner {
     }).flatMap {
       _.fold({ kd ⇒
         log.error(s"Can't find kd:[$kd] in current index")
-        Process.emit(List(Result(ord.kd)))
+        Process.emit(List.empty[Result])
       }, { seq ⇒
         Process.emit(groupByOptimalNumber(ord, lenghtThreshold, minLenght, log)(seq))
           .map { list: List[Result] ⇒ distributeWithinGroup(lenghtThreshold, minLenght, log)(list) }

@@ -15,20 +15,18 @@
 package com.izmeron
 
 import java.util.concurrent.ExecutorService
-
 import io.netty.channel.ChannelHandler.Sharable
 import io.netty.channel.group.DefaultChannelGroup
 import io.netty.channel.nio.NioEventLoopGroup
 import io.netty.util.concurrent.GlobalEventExecutor
 import unfiltered.Async
 import unfiltered.netty.async.Plan.Intent
-import unfiltered.netty.{ SocketBinding, ServerErrorResponse, async }
+import unfiltered.netty.{ ReceivedMessage, SocketBinding, ServerErrorResponse, async }
 import unfiltered.request._
 import unfiltered.response._
 
 import scala.collection.mutable
 import scala.concurrent.{ ExecutionContext, Future }
-import scala.io.Codec
 import scala.util.control.NonFatal
 import scala.util.{ Failure, Success }
 import scalaz.{ -\/, \/- }
@@ -130,25 +128,79 @@ object http {
                                index: mutable.Map[String, RawResult],
                                minLenght: Int, lenghtThreshold: Int) extends async.Plan
       with ServerErrorResponse with AsyncContext {
-    //import spray.json._
-    //import DefaultJsonProtocol._
-
+    import spray.json._
+    import scala.collection._
     import scalaz.stream.merge
     import scalaz.stream.csv._
+    import scalaz.stream.Process
     import scalaz.std.AllInstances._
 
-    implicit val M = scalaz.Monoid[List[Result]]
     val limit = Runtime.getRuntime.availableProcessors()
-    implicit val EX = scalaz.concurrent.Strategy.Executor(PlannerEx)
-    val LoggerSink = scalaz.stream.sink.lift[Task, Iterable[Result]] { list ⇒
-      Task.delay(server.log.debug(s"Order-line output: $list"))
+    val loggerSink = scalaz.stream.sink.lift[Task, Iterable[Result]] { list ⇒
+      Task.delay(server.log.debug(s"order-line: $list"))
     }
 
+    val jsMapper = { cs: List[Combination] ⇒
+      val init = JsObject("group" -> JsString(cs.head.groupKey), "body" -> JsArray())
+      val writerSheet = new spray.json.JsonWriter[Sheet] {
+        override def write(s: Sheet): JsValue =
+          JsObject("kd" -> JsString(s.kd), "lenght" -> JsNumber(s.lenght), "quantity" -> JsNumber(s.quantity))
+      }
+      cs./:(init) { (acc, c) ⇒
+        val cur = JsObject(
+          "sheet" -> JsArray(c.sheets.toVector.map(writerSheet.write(_))),
+          "balance" -> JsNumber(c.rest),
+          "lenght" -> JsNumber(lenghtThreshold - c.rest)
+        )
+        JsObject(
+          "group" -> acc.fields("group"),
+          "body" -> JsArray(acc.fields("body").asInstanceOf[JsArray].elements.:+(cur))
+        )
+      }
+    }
+
+    implicit val JsValueM = new scalaz.Monoid[JsObject] {
+      override def zero = JsObject("uri" -> JsString("/orders"), "body" -> JsArray())
+      override def append(f1: JsObject, f2: ⇒ JsObject): JsObject = {
+        (f1, f2) match {
+          case (f1: JsObject, f2: JsValue) ⇒
+            JsObject("uri" -> f1.fields("uri").asInstanceOf[JsString],
+              "body" -> JsArray(f1.fields("body").asInstanceOf[JsArray].elements.:+(f2)))
+        }
+      }
+    }
+
+    def queuePublisher(it: Iterator[List[Result]]): Process[Task, List[Result]] = {
+      def go(iter: Iterator[List[Result]]): Process[Task, List[Result]] =
+        Process.await(Task.delay(iter)) { iter ⇒
+          if (iter.hasNext) Process.emit(iter.next) ++ go(iter)
+          else Process.halt
+        }
+      go(it)
+    }
+
+    def workers(queue: scalaz.stream.async.mutable.Queue[List[Result]]): Process[Task, Process[Task, List[Combination]]] =
+      Process.range(0, limit).map(_ ⇒ queue.dequeue.map(cuttingStockProblem(_, lenghtThreshold, minLenght, server.log)))
+
+    def inputReader(queue: scalaz.stream.async.mutable.Queue[List[Result]],
+                    req: HttpRequest[ReceivedMessage])(implicit S: scalaz.concurrent.Strategy): Process[Task, Unit] =
+      (merge.mergeN(limit)(rowsR[Order](req.inputStream, ';').map(server.plan(_, index)))(S) observe loggerSink)
+        .map { list ⇒ list.headOption.fold(immutable.Map[String, List[Result]]())(head ⇒ immutable.Map(head.groupKey -> list)) }
+        .foldMonoid
+        .flatMap { map ⇒ queuePublisher(map.values.iterator) to queue.enqueue }
+        .onComplete(scalaz.stream.Process.eval_ { server.log.debug("All input has been scheduled"); queue.close })
+
+    /**
+     *
+     *
+     * @return
+     */
     override def intent: Intent = {
       case req ⇒
-        implicit val responder: unfiltered.Async.Responder[Any] = req
         implicit val ex = PlannerEx
+        implicit val CpuIntensive = scalaz.concurrent.Strategy.Executor(PlannerEx)
         implicit val Codec: scala.io.Codec = scala.io.Codec.UTF8
+        implicit val responder: unfiltered.Async.Responder[Any] = req
         req match {
           case GET(Path("/info")) ⇒
             req.respond(textResponse { server.log.debug("GET /info"); server.v.toString })
@@ -157,12 +209,13 @@ object http {
           //http POST http://127.0.0.1:9001/orders < ./cvs/order.csv
           case POST(Path("/orders")) ⇒
             forkTask {
-              (merge.mergeN(limit)(rowsR[Order](req.inputStream, ';').map(server.plan(_, index)))(EX) observe LoggerSink)
-                .map(list ⇒ scala.collection.immutable.Map(list.head.groupKey -> list))
-                .foldMonoid
-                .map(distributeWithGroup(_, lenghtThreshold, minLenght, server.log))
-                .runLast.map { _.fold(errorResponse("empty"))(map ⇒ textResponse(map.mkString(";") + END)) }
+              val queue = scalaz.stream.async.boundedQueue[List[Result]](limit * limit)
+              (inputReader(queue, req).drain merge merge.mergeN(limit)(workers(queue)))
+                .foldMap(jsMapper(_))(JsValueM)
+                .runLast
+                .map { _.fold(errorResponse("empty response"))(json ⇒ jsonResponse(json.prettyPrint)) }
             }
+
           case invalid ⇒
             responder.respond(errorResponse(s"Invalid request: ${invalid.method} ${invalid.uri}"))
         }

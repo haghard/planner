@@ -16,9 +16,13 @@ package com
 
 import java.util.concurrent.Executors._
 
+import scala.annotation.tailrec
+import scala.collection.mutable.ArrayBuffer
+import scala.util.Try
 import scalaz.\/
 
 package object izmeron {
+
   import scala.collection.mutable
   import com.ambiata.origami.FoldM
   import com.ambiata.origami._, Origami._
@@ -34,6 +38,7 @@ package object izmeron {
   val PlannerEx = newFixedThreadPool(Runtime.getRuntime.availableProcessors(), new NamedThreadFactory("planner"))
 
   case class Order(kd: String, quantity: Int)
+
   implicit val rowReader0 = RowReader(rec ⇒ Order(rec(0), rec(1).toInt))
 
   case class RawCsvLine(kd: String, name: String, nameMat: String, marka: String,
@@ -71,6 +76,7 @@ package object izmeron {
 
   final class NamedThreadFactory(var name: String) extends ThreadFactory {
     private def namePrefix = name + "-thread"
+
     private val threadNumber = new AtomicInteger(1)
     private val group: ThreadGroup = Thread.currentThread().getThreadGroup
 
@@ -88,6 +94,7 @@ package object izmeron {
       state.debug(elem)
       state
     }
+
     override val start: scalaz.Id.Id[Logger] =
       Logger.getLogger(name)
 
@@ -95,57 +102,181 @@ package object izmeron {
       s.debug(s"$name is being completed")
   }
 
-  def distributeWithGroup(group: collection.immutable.Map[String, List[Result]],
-                          threshold: Int, minLenght: Int, log: org.apache.log4j.Logger): mutable.Map[String, List[Result]] = {
-    val gMap = group.values.flatten./:(collection.mutable.Map[String, List[Result]]()) { (map, c) ⇒
+  case class StockUnit(id: Int, kdKey: String, group: String, length: Int)
+
+  case class Provision(kdKey: String = "", length: Int = 0, stocks: List[Int] = Nil)
+
+  private def create(r: Result, ind: Int): StockUnit = StockUnit(ind, r.kd, r.groupKey, r.length)
+
+  def cuttingStockProblem(group: List[Result], threshold: Int, minLenght: Int,
+                          log: org.apache.log4j.Logger): List[Combination] = {
+    val gk = group.head.groupKey
+    val groupedMap = group./:(collection.mutable.Map[String, List[Result]]()) { (map, c) ⇒
       if ((c.kd ne null) && (c.kd.length > 0))
         map += (c.kd -> (c :: map.getOrElse(c.kd, List.empty[Result])))
       map
     }
 
-    //log.debug("group:" + gMap)
-    val groupedMap = collection.mutable.Map[String, List[Result]]()
-    for ((k, v) ← gMap) {
-      var minR = v.minBy(_.cQuantity)
-      val others = v.filter(_ != minR)
-      log.debug(s"minR:$minR - cQuantity:${minR.cQuantity} - optQuantity:${minR.optQuantity}")
-      if (minR.cQuantity < minR.optQuantity) {
-        val candidates = gMap.filterKeys(_ != k)
-        for ((k0, v0) ← candidates) {
-          var index = 0
-          var i = 0
-          var touched = false
-          val completed = v0.toBuffer
-          var gk: String = null.asInstanceOf[String]
-          for (c ← completed) {
-            if (threshold - (c.length * c.cQuantity) > minLenght && minR.cQuantity > 0) {
-              log.debug(s"ind: $index - from $minR - to:${completed(index)}")
-              touched = true
-              gk = s"${minR.kd} - ${c.kd}"
-              groupedMap += (gk -> (c :: groupedMap.getOrElse(gk, List.empty[Result])))
-              groupedMap += (gk -> (minR.copy(cQuantity = 1, cLength = minR.length) :: groupedMap(gk)))
-              val (reduced, increased) = Result.redistribute2(minR, c)
-              minR = reduced
-              completed(index) = increased
-              i += 1
-              index = i % completed.size
-            }
-          }
-
-          if (!touched)
-            groupedMap += (k0 -> (v0 ::: groupedMap.getOrElse(k, List.empty[Result])))
-
-          //collect rest of from
-          if (index % completed.size != 0)
-            groupedMap += (k0 -> (completed.drop(index).toList))
-        }
-
-        //collect rest of to
-        if (minR.cQuantity > 0) groupedMap += (k -> (minR :: groupedMap.getOrElse(k, List.empty[Result])))
-        groupedMap += (k -> (others ::: groupedMap.getOrElse(k, List.empty[Result])))
+    if (groupedMap.keySet.size == 1) {
+      log.debug(s"Simple grouping with: $group")
+      val list = groupedMap.values.iterator.next()
+      list./:(List.empty[Combination]) { (acc, c) ⇒
+        var ind = 0
+        Combination(groupKey = c.groupKey,
+          sheets = List.fill(c.cQuantity) {
+            ind += 1
+            Sheet(c.kd, c.length, 1)
+          },
+          rest = threshold - c.cLength) :: acc
       }
+    } else if (groupedMap.keySet.size >= 2) {
+      log.debug(s"CuttingStockProblem with: $group")
+      val expanded = groupedMap./:(List.empty[StockUnit]) { (acc, c) ⇒
+        var ind = 0
+        acc ::: c._2.flatMap { r ⇒
+          List.fill(r.cQuantity) {
+            ind += 1
+            create(r, ind)
+          }
+        }
+      }
+      log.debug(s"Expanded with: $expanded")
+
+      var provision: List[Provision] = Nil
+      for ((k, list) ← expanded.groupBy(_.kdKey)) {
+        var r = Provision()
+        var sumLenght = 0
+        for (el ← list) {
+          sumLenght += el.length
+          if (sumLenght < minLenght) {
+            r = r.copy(el.kdKey, r.length, el.id :: r.stocks)
+          } else {
+            provision = r.copy(el.kdKey, sumLenght, el.id :: r.stocks) :: provision
+            sumLenght = 0
+            r = Provision()
+          }
+        }
+        if (r.stocks.headOption.isDefined)
+          provision = r.copy(length = sumLenght) :: provision
+      }
+      log.debug(s"Provision: $provision")
+
+      val lensCounts = provision./:(mutable.Map[Int, Int]().withDefaultValue(0)) { (acc, c) ⇒
+        val currentLength = acc(c.length)
+        if (currentLength == 0) acc += (c.length -> 1)
+        else acc += (c.length -> (currentLength + 1))
+        acc
+      }
+      val lenMapping = provision./:(mutable.Map[Int, List[String]]().withDefaultValue(Nil)) { (acc, c) ⇒
+        acc(c.length) match {
+          case Nil    ⇒ acc += (c.length -> List(c.kdKey))
+          case h :: t ⇒ acc += (c.length -> (c.kdKey :: h :: t))
+        }
+        acc
+      }
+
+      val blocks = lensCounts.keySet.toArray
+      val quantities = lensCounts.values.toArray
+
+      log.debug(s"LensCounts: $lensCounts")
+      log.debug(s"lenMapping: $lenMapping")
+
+      collect(blocks, quantities, threshold, log, Nil).fold(List.empty[Combination]) {
+        _.map { cmb ⇒
+          cmb.copy(groupKey = gk, sheets =
+            cmb.sheets.map { sheet ⇒
+              val list = lenMapping(sheet.lenght)
+              if (sheet.quantity == 1)
+                lenMapping += (sheet.lenght -> list.tail)
+              else
+                lenMapping += (sheet.lenght -> list.tail.drop(sheet.quantity - 1))
+              sheet.copy(kd = list.head)
+            })
+        }
+      }
+    } else Nil
+  }
+
+  def collect(blocks: Array[Int], quantities: Array[Int],
+              sheetLength: Int, log: org.apache.log4j.Logger,
+              items: List[Combination]): Option[List[Combination]] = {
+    cutNext(blocks, quantities, sheetLength, log) flatMap { cmb ⇒
+      val (b, q) = crossOut(cmb)
+      if (q.length > 0) {
+
+        //artificial part
+        if (q.length == 2 && (b(0) + b(0)) <= sheetLength) {
+          val artificial = Combination(List(Sheet(lenght = b(0), quantity = 1), Sheet(lenght = b(1), quantity = 1)), sheetLength - (b(0) + b(1)))
+          val (bA, qA) = crossOut((artificial, b, q))
+          collect(bA, qA, sheetLength, log, artificial :: cmb._1 :: items)
+        } else collect(b, q, sheetLength, log, cmb._1 :: items)
+      } else Option(cmb._1 :: items)
     }
-    if (groupedMap.isEmpty) { log.debug("nothing to distribute"); gMap } else groupedMap
+  }
+
+  def crossOut(cmb: (Combination, Array[Int], Array[Int])): (Array[Int], Array[Int]) = {
+    val blocks = cmb._2.toBuffer
+    val quantities = cmb._3.toBuffer
+    for (c ← cmb._1.sheets) {
+      var ind = 0
+      while (blocks(ind) != c.lenght) { //IndexOutOfBound
+        ind += 1
+      }
+
+      val cur = quantities(ind)
+      if (cur > c.quantity) {
+        quantities(ind) = cur - c.quantity
+      } else if (cur == c.quantity) {
+        blocks.remove(ind)
+        quantities.remove(ind)
+      } else throw new Exception("Can't cross out more than we have") //error
+    }
+    (blocks.toArray, quantities.toArray)
+  }
+
+  case class Sheet(kd: String = "", lenght: Int = 0, quantity: Int = 0)
+  case class Combination(sheets: List[Sheet] = Nil, rest: Int = 0, groupKey: String = "")
+
+  import com.izmeron.CuttingStockProblem
+  import java.util.{ Map ⇒ JMap, HashMap ⇒ JHashMap }
+  def cutNext(blocks: Array[Int], quantities: Array[Int],
+              sheetLength: Int, log: org.apache.log4j.Logger): Option[(Combination, Array[Int], Array[Int])] = {
+
+    val quantities0 = Array.fill(quantities.size)(0)
+    val blocks0 = Array.fill(blocks.size)(0)
+    Array.copy(quantities, 0, quantities0, 0, quantities.size)
+    Array.copy(blocks, 0, blocks0, 0, blocks.size)
+
+    @tailrec def loop(problem: CuttingStockProblem, result: List[Combination],
+                      error: Boolean): List[Combination] =
+      if (problem.hasMoreCombinations && !error) {
+        var wasError = false
+        var sheets: List[Sheet] = List.empty
+        val map: JMap[Integer, Integer] = Try(problem.nextBatch)
+          .getOrElse { wasError = true; new JHashMap[Integer, Integer](1) }
+        val iter = map.entrySet.iterator
+        var sum = 0
+        var k = 0
+        var v = 0
+        while (iter.hasNext) {
+          val next = iter.next
+          k = next.getKey
+          v = next.getValue
+          sum += k * v
+          sheets = Sheet(lenght = k, quantity = v) :: sheets
+        }
+        loop(problem, Combination(sheets, sheetLength - sum) :: result, wasError)
+      } else result
+
+    val combinations = loop(new CuttingStockProblem(sheetLength, blocks, quantities), Nil, false)
+    combinations.headOption.map { head ⇒
+      combinations./:(head) { (acc, c) ⇒
+        if (acc == c) c
+        else if (c.rest < acc.rest) c
+        else if (c.sheets.size > acc.sheets.size) c
+        else acc
+      }
+    }.map((_, blocks0, quantities0))
   }
 
   def groupByOptimalNumber(ord: Order, threshold: Int, minLenght: Int, log: org.apache.log4j.Logger)(rr: RawResult): List[Result] = {
