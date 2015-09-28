@@ -76,20 +76,6 @@ object http {
     @volatile var http: Option[unfiltered.netty.Server] = None
     private val host = unfiltered.netty.Server.allInterfacesHost
 
-    override val csvProcess: scalaz.stream.Process[Task, Etalon] =
-      scalaz.stream.csv.rowsR[RawCsvLine](path, ';').map { raw ⇒
-        Etalon(raw.kd, raw.name, raw.nameMat, raw.marka,
-          raw.diam.replaceAll(cvsSpace, empty).toInt,
-          raw.len.replaceAll(cvsSpace, empty).toInt,
-          raw.indiam.replaceAll(cvsSpace, empty).toInt,
-          raw.numOptim.replaceAll(cvsSpace, empty).toInt,
-          raw.numMin.replaceAll(cvsSpace, empty).toInt,
-          raw.lenMin.replaceAll(cvsSpace, empty).toInt,
-          raw.numSect.replaceAll(cvsSpace, empty).toInt,
-          raw.numPart.replaceAll(cvsSpace, empty).toInt,
-          raw.techComp.replaceAll(cvsSpace, empty).toInt)
-      }
-
     private val engine = new unfiltered.netty.Engine {
       override val acceptor = new NioEventLoopGroup(1, new NamedThreadFactory("boss"))
       override val workers = new NioEventLoopGroup(Runtime.getRuntime.availableProcessors() * 2, new NamedThreadFactory("worker"))

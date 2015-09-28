@@ -85,7 +85,7 @@ public class CuttingStockProblem {
 
     while(true) {
       while(start) {
-        this.combinations();
+        combinations();
         int var7 = 0;
 
         int i;

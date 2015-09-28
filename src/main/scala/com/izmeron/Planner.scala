@@ -34,29 +34,56 @@ trait Planner {
 
   def minLenght: Int
 
-  def csvProcess: scalaz.stream.Process[Task, Etalon]
+  def csvProcess: scalaz.stream.Process[Task, Etalon] =
+    scalaz.stream.csv.rowsR[RawCsvLine](path, ';').map { raw ⇒
+      Etalon(raw.kd, raw.name, raw.nameMat, raw.marka,
+        raw.diam.replaceAll(cvsSpace, empty).toInt,
+        raw.len.replaceAll(cvsSpace, empty).toInt,
+        raw.indiam.replaceAll(cvsSpace, empty).toInt,
+        raw.numOptim.replaceAll(cvsSpace, empty).toInt,
+        raw.numMin.replaceAll(cvsSpace, empty).toInt,
+        raw.lenMin.replaceAll(cvsSpace, empty).toInt,
+        raw.numSect.replaceAll(cvsSpace, empty).toInt,
+        raw.numPart.replaceAll(cvsSpace, empty).toInt,
+        raw.techComp.replaceAll(cvsSpace, empty).toInt)
+    }
 
   def start(): Unit
 
   def shutdown(): Unit
 
-  def foldCount_Plus: FoldM[SafeTTask, Etalon, (Int, Int)] =
+  private[izmeron] def maxLen: FoldM[SafeTTask, Etalon, Option[Etalon]] =
+    maximumBy[Etalon, Int] { e: Etalon ⇒ e.len }.into[SafeTTask]
+
+  private[izmeron] def maxLenOfUnit: FoldM[SafeTTask, Etalon, Option[Etalon]] =
+    maximumBy[Etalon, Int] { e: Etalon ⇒ e.lenMin }.into[SafeTTask]
+
+  private[izmeron] def highs: FoldM[SafeTTask, Etalon, (Option[Etalon], Option[Etalon])] =
+    maxLen <*> maxLenOfUnit
+
+  private[izmeron] def foldCount_Plus: FoldM[SafeTTask, Etalon, (Int, Int)] =
     ((count[Etalon] observe Log4jSink) <*> plusBy[Etalon, Int](_.diam)).into[SafeTTask]
 
-  //import com.ambiata.origami.stream.FoldableProcessM._
-
-  private def groupBy3: FoldM[SafeTTask, Etalon, Map[String, Int]] =
+  private[izmeron] def groupBy3: FoldM[SafeTTask, Etalon, Map[String, Int]] =
     fromMonoidMap { line: Etalon ⇒ Map(s"${line.marka}/${line.diam}/${line.indiam}" -> 1) }
       .into[SafeTTask]
 
-  private def groupBy3_0: FoldM[SafeTTask, Etalon, mutable.Map[String, Int]] =
+  private[izmeron] def groupByKey: FoldM[SafeTTask, Etalon, Map[String, String]] =
+    fromMonoidMap { line: Etalon ⇒ Map(s"${line.marka}/${line.diam}/${line.indiam}" -> s"${line.kd}-") }
+      .into[SafeTTask]
+
+  private[izmeron] def groupByKeyMinLen: FoldM[SafeTTask, Etalon, Map[String, String]] =
+    fromMonoidMap { line: Etalon ⇒ Map(s"${line.marka}/${line.diam}/${line.indiam}" -> s"${line.lenMin}-") }
+      .into[SafeTTask]
+
+  private[izmeron] def groupBy3_0: FoldM[SafeTTask, Etalon, mutable.Map[String, Int]] =
     fromFoldLeft[Etalon, mutable.Map[String, Int]](mutable.Map[String, Int]().withDefaultValue(0)) { (acc, c) ⇒
       val key = s"${c.marka}/${c.diam}/${c.indiam}"
       acc += (key -> (acc(key) + 1))
       acc
     }.into[SafeTTask]
 
-  private def buildIndex: FoldM[SafeTTask, Etalon, mutable.Map[String, RawResult]] =
+  private[izmeron] def buildIndex: FoldM[SafeTTask, Etalon, mutable.Map[String, RawResult]] =
     fromFoldLeft[Etalon, mutable.Map[String, RawResult]](mutable.Map[String, RawResult]()) { (acc, c) ⇒
       val key = s"${c.marka}/${c.diam}/${c.indiam}"
       acc += (c.kd -> RawResult(c.kd, key, c.qOptimal, c.len, c.lenMin, c.tProfit, c.qMin, c.numSect))
@@ -65,6 +92,9 @@ trait Planner {
 
   def createIndex: Task[(Throwable \/ mutable.Map[String, RawResult], Option[FinalizersException])] =
     Task.fork((buildIndex run csvProcess).attemptRun)(PlannerEx)
+
+  /*def createIndex2: Task[(Throwable \/ mutable.Map[String, RawResult], Option[FinalizersException])] =
+    Task.fork(groupByKey*/
 
   /**
    *

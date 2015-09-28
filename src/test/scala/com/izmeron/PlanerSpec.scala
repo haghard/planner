@@ -16,22 +16,21 @@ package com.izmeron
 
 import org.specs2.mutable.Specification
 import com.twitter.algebird.{Monoid ⇒ TwitterMonoid, Hash128, MinHashSignature, MinHasher, MinHasher32}
-
-import scala.annotation.tailrec
+import scalaz.concurrent.Task
 
 class PlanerSpec extends Specification {
   val lenghtThreshold = 1200
   val minLenght = 400
-  val log = org.apache.log4j.Logger.getLogger("test-planner")
+  val logger = org.apache.log4j.Logger.getLogger("test-planner")
 
   case class FollowersGraph[From, To](branches: Set[(From, To)]) {
     def propagate[T: TwitterMonoid](mapping: Map[From, T]): Map[To, T] =
       branches
         .groupBy(_._2)
         .mapValues { edges ⇒
-          val vs = edges.map(fromTo ⇒ mapping.getOrElse(fromTo._1, TwitterMonoid.zero[T]))
-          TwitterMonoid.sum(vs)
-        }
+        val vs = edges.map(fromTo ⇒ mapping.getOrElse(fromTo._1, TwitterMonoid.zero[T]))
+        TwitterMonoid.sum(vs)
+      }
   }
 
   def exactSimilarity[T](x: Set[T], y: Set[T]) =
@@ -42,7 +41,8 @@ class PlanerSpec extends Specification {
     val sigY = y.map(elem ⇒ mh.init(elem.toString)).reduce(mh.plus(_, _))
     mh.similarity(sigX, sigY)
   }
-/*
+
+  /*
   "Levels of followers" should {
     "run" in {
 
@@ -166,170 +166,144 @@ class PlanerSpec extends Specification {
     }
   }*/
 
-  "CuttingStockProblem" should {
+  "Read file and analyze" should {
     "run" in {
-      var i = 0
-      val maxSize = 1200 //200 * 9 + 170 * 8 + 120 * 5 = 3760
+      import scalaz._, Scalaz._
+      import com.ambiata.origami._, Origami._
+      import com.ambiata.origami.stream.FoldableProcessM._
+      import com.ambiata.origami._, Origami._
 
-      //val blocks = Array[Int](700, 500, 250, 380)
-      //val quantities = Array[Int](4, 3, 6, 5)
+      object TestPlanner extends Planner {
+        override val log = logger
+        override val minLenght = 400
+        override val lenghtThreshold = 1200
+        override val path = "./cvs/metal2pipes2.csv"
 
-      //val x = 200 * 9 + 170 * 8 + 120 * 5
+        override def start(): Unit = {
+          //val (l,r) = (highs run csvProcess).run.run
+          //log.debug(s" $l - $r")
+          /*
+          val res = (groupByKey run csvProcess).run.run.values.find { line =>
+            line.count(_ == '-') > 1
+          }
+          res.fold(log.debug("0"))(line => log.debug(line))
+          */
+          val map = (groupByKeyMinLen run csvProcess).run.run
+          log.debug(s"Max: ${map.values.maxBy(_.length)}")
 
-      //val blocks = Array[Int](200, 170, 120)
-      //val quantities = Array[Int](9, 8, 5)
-      //200 * 2
-      //120 * 1
-      //170 * 4
+          val sames = map.filter { kv =>
+            val lens = kv._2.split("-")
+            var ind = 0
+            var found = false
 
-      //val blocks = Array[Int](200, 170, 120)
-      //val quantities = Array[Int](7, 4, 4)
-      //200 * 2
-      //120 * 1
-      //170 * 4
+            while(!found && ind < lens.size) {
+              val current = lens(ind)
+              ind += 1
+              found = lens.filter(_ == current).size > 1
+            }
+            found
+          }
 
-      //val blocks = Array[Int](200, 120)
-      //val quantities = Array[Int](5, 3)
-      //200 * 4
-      //120 * 3 - 1160
-
-      //val blocks = Array[Int](200, 120)
-      //val quantities = Array[Int](1, 0)
-      //*********************************************************
-
-      //Exception
-      //val blocks = Array[Int](220, 400, 340, 480, 510, 120)
-      //val quantities = Array[Int](4, 4, 6, 5, 2, 6)
-
-      //200 -> 1, 400 -> 4, 340 -> 1, 480 -> 1, 510 -> 2, 120 -> 1
-
-      //val blocks = Array[Int](200, 400, 340, 480, 510, 120)
-      //val quantities = Array[Int](1, 4, 1, 1, 2, 1)
-      //prefer longest
-      //480 * 1
-      //400 * 1
-      //200 * 1
-      //120 * 1
-      // Sum:1200
-
-      //val blocks = Array[Int](400, 340, 510)
-      //val quantities = Array[Int](3, 1, 2)
-      //400 * 3
-      // Sum:1200
-
-      //val blocks = Array[Int](340, 510)
-      //val quantities = Array[Int](1, 2)
-
-      //340 * 1
-      //510 * 1
-      // Sum: 350
-
-     //val blocks = Array[Int](510)
-     //val quantities = Array[Int](1)
-
-      //510 * 1
-      // Sum: 690
-
-      val blocks = Array[Int](200, 400, 340, 480, 510, 120)
-      val quantities = Array[Int](1, 4, 1, 1, 2, 1)
-      //120 * 1 / 200 * 1 / 400 * 1 / 480 *
-
-      val r = collect(blocks, quantities, lenghtThreshold, log, Nil)
-      println(r)
-
-
-      //log.debug(com.izmeron.cut(blocks, quantities, maxSize, log))
-
-      /*val list = Variant(List(Sheet(400,3)), 0) ::
-          Variant(List(Sheet(120,1), Sheet(200,1), Sheet(400,1), Sheet(480,1)), 0) ::
-          Variant(List(Sheet(120,1), Sheet(200,1)), 0) ::
-          Variant(List(Sheet(510,2)), 180) ::
-            Variant(List(Sheet(340,1)), 760) :: Nil
-
-
-      val r = list./:(list.head) { (acc, c) =>
-        if (acc == c) c
-        else if (c.rest < acc.rest) c
-        else if (c.list.size > acc.list.size) c
-        else acc
-      }
-      println(r)*/
-
-      /*var map: java.util.Map[Integer, Integer] = null
-      val cuttingStock = new com.izmeron.CuttingStockProblem(maxSize, blocks, quantities)
-      while (cuttingStock.hasMoreCombinations) {
-        i += 1
-        log.debug(s"Combination no $i")
-        map = cuttingStock.nextBatch
-        val iter = map.entrySet.iterator
-        var sum = 0
-        while (iter.hasNext) {
-          val inner = iter.next
-          sum += inner.getKey * inner.getValue
-          log.debug(s"${inner.getKey} * ${inner.getValue}")
+          logger.debug(sames.size)
+          logger.debug(sames)
         }
-        log.debug(s"Sum:$sum")
-      }*/
 
+        override def shutdown(): Unit = ???
+      }
+
+      TestPlanner.start()
       1 === 1
     }
   }
 
-  /*
-  "Binding to asynchronous sources" should {
-    "run0" in {
-      val map = collection.immutable.Map[String, List[Result]](
-        "86501.420.001.900" -> (Result("86501.420.001.900", "Сталь 38ХГМ/100/45", length = 200, cLength = 604, cQuantity = 3, optQuantity = 6) ::
-            Result("86501.420.001.900", "Сталь 38ХГМ/100/45", length = 200, cLength = 1200, cQuantity = 6, optQuantity = 6) :: Nil),
-        "86501.420.009.111" -> (Result("86501.420.009.111", "Сталь 38ХГМ/100/45", length = 120, cLength = 480, cQuantity = 4, optQuantity = 4) :: Nil),
-        "94100.001.007.072" -> (Result("94100.001.007.072", "Сталь 38ХГМ/100/45", length = 170, cLength = 684, cQuantity = 4, optQuantity = 3) ::
-              Result("94100.001.007.072", "Сталь 38ХГМ/100/45", length = 170, cLength = 684, cQuantity = 4, optQuantity = 3) :: Nil)
-      )
+  "cuttingStockProblem" should {
+    val threshold = 1400
+    val minLenght = 400
+    "scenario0" in {
+      val rs =
+        Result("86401.095", "Сталь 20Х/120/56", 614, 1228, 2, 2, 1, 1, 0) ::
+        Result("86602.056", "Сталь 20Х/120/56", 275, 825, 3, 3, 1, 1, 0) ::
+        Result("86602.006", "Сталь 20Х/120/56", 276, 1380, 5, 5, 1, 1, 0) ::
+        Result("86401.905", "Сталь 20Х/120/56", 564, 1128, 2, 2, 1, 1, 0) ::
+        Result("86602.038", "Сталь 20Х/120/56", 270, 1080, 4, 4, 1, 1, 0) :: Nil
 
-      val actual = distributeWithGroup(map, lenghtThreshold, minLenght, log)
+      val r = cuttingStockProblem(rs, threshold, minLenght, logger)
+      logger.debug(r)
 
-      actual("86501.420.001.900") === List(Result("86501.420.001.900", "Сталь 38ХГМ/100/45", length=200, cLength=1200, cQuantity=6, optQuantity =6))
-      actual("86501.420.001.900 - 94100.001.007.072") === List(
-        Result("86501.420.001.900", "Сталь 38ХГМ/100/45", length = 200, cLength = 200, cQuantity = 1, optQuantity = 6),
-        Result("94100.001.007.072", "Сталь 38ХГМ/100/45", length = 170, cLength = 684, cQuantity = 4, optQuantity = 3),
-        Result("86501.420.001.900", "Сталь 38ХГМ/100/45", length = 200, cLength = 200, cQuantity = 1, optQuantity = 6),
-        Result("94100.001.007.072", "Сталь 38ХГМ/100/45", length = 170, cLength = 684, cQuantity = 4, optQuantity = 3)
-      )
+      val actual = r.find(e => threshold - e.rest <= minLenght)
+      logger.debug(actual)
+      actual.isDefined === false
+    }
+/*
+    "scenario1" in {
+      val rs =
+        Result("93901.00.05.101","Сталь 20Х2Н4А/115/45",514,1028,2,2,1,1,0) ::
+          Result("93901.05.003","Сталь 20Х2Н4А/115/45",503,1006,2,2,1,1,0) ::
+          Result("93901.00.05.201","Сталь 20Х2Н4А/115/45",514,1028,2,2,1,1,0) ::
+          Result("93901.00.05.301","Сталь 20Х2Н4А/115/45",514,1028,2,2,1,1,0) :: Nil
 
-      actual("86501.420.001.900 - 86501.420.009.111") === List(
-        Result("86501.420.001.900", "Сталь 38ХГМ/100/45", length = 200, cLength = 200, cQuantity = 1, optQuantity = 6),
-        Result("86501.420.009.111", "Сталь 38ХГМ/100/45", length = 120, cLength = 480, cQuantity = 4, optQuantity = 4))
+      val r = cuttingStockProblem(rs, threshold, minLenght, logger)
+      logger.debug(r)
+
+      val actual = r.find(e => threshold - e.rest <= minLenght)
+      logger.debug(actual)
+      actual.isDefined === false
+    }
+
+    "scenario3" in {
+      val rs = List(Result("86501.420.009.111","Сталь 38ХГМ/100/45",120,604,5,4,1,1,0),
+        Result("86501.420.001.900","Сталь 38ХГМ/100/45",200,604,3,6,1,1,0),
+        Result("86501.420.001.900","Сталь 38ХГМ/100/45",200,1200,6,6,1,1,0),
+        Result("94100.001.007.072","Сталь 38ХГМ/100/45",170,684,4,3,1,1,0),
+        Result("94100.001.007.072","Сталь 38ХГМ/100/45",170,684,4,3,1,1,0))
+
+      val r = cuttingStockProblem(rs, threshold, minLenght, logger)
+      logger.debug(r)
+
+      val actual = r.find(e => threshold - e.rest <= minLenght)
+      logger.debug(actual)
+      actual.isDefined === false
+    }
+
+    "scenario4" in {
+      val rs = Result("94900.04.701","Сталь 38ХГМ/260/78",437,874,2,2,1,1,0) ::
+          Result("94900.04.751","Сталь 38ХГМ/260/78",437,874,2,2,1,1,0) :: Nil
+
+      val r = cuttingStockProblem(rs, threshold, minLenght, logger)
+      logger.debug(r)
+
+      val actual = r.find(e => threshold - e.rest <= minLenght)
+      logger.debug(actual)
+      actual.isDefined === false
+    }
+
+    "scenario4" in {
+      val rs =
+        List(Result("94900.04.701","Сталь 38ХГМ/260/78",437,1315,3,2,1,1,0),
+          Result("94900.04.751","Сталь 38ХГМ/260/78",437,874,2,2,1,1,0),
+          Result("94900.04.751","Сталь 38ХГМ/260/78",437,874,2,2,1,1,0))
+
+      val r = cuttingStockProblem(rs, threshold, minLenght, logger)
+      logger.debug(r)
+
+      val actual = r.find(e => threshold - e.rest <= minLenght)
+      logger.debug(actual)
+      actual.isDefined === false
+    }
+*/
+
+    "scenario5" in {
+      val rs =
+        List(Result("94900.04.701","Сталь 38ХГМ/260/78",437,874,2,2,1,1,0),
+          Result("94900.04.751","Сталь 38ХГМ/260/78",437,874,2,2,1,1,0),
+          Result("94900.04.881","Сталь 38ХГМ/260/78",502,1004,2,2,1,1,0))
+
+      val r = cuttingStockProblem(rs, threshold, minLenght, logger)
+      logger.debug(r)
+
+      val actual = r.find(e => threshold - e.rest <= minLenght)
+      logger.debug(actual)
+      actual.isDefined === false
     }
   }
-
-
-  "Binding to asynchronous sources" should {
-    "run1" in {
-      val map = collection.immutable.Map[String, List[Result]](
-        "86501.420.001.900" -> (Result("86501.420.001.900", "Сталь 38ХГМ/100/45", length = 200, cLength = 404, cQuantity = 2, optQuantity = 6) ::
-          Result("86501.420.001.900", "Сталь 38ХГМ/100/45", length = 200, cLength = 1200, cQuantity = 6, optQuantity = 6) :: Nil),
-        "86501.420.009.111" -> (Result("86501.420.009.111", "Сталь 38ХГМ/100/45", length = 120, cLength = 480, cQuantity = 4, optQuantity = 4) :: Nil),
-        "94100.001.007.072" -> (Result("94100.001.007.072", "Сталь 38ХГМ/100/45", length = 170, cLength = 684, cQuantity = 4, optQuantity = 3) ::
-          Result("94100.001.007.072", "Сталь 38ХГМ/100/45", length = 170, cLength = 684, cQuantity = 4, optQuantity = 3) :: Nil)
-      )
-
-      val actual = distributeWithGroup(map, lenghtThreshold, minLenght, log)
-      1 === 1
-    }
-  }
-
-  "Binding to asynchronous sources" should {
-    "run2" in {
-      val map = collection.immutable.Map[String, List[Result]](
-        "86501.420.001.900" -> (Result("86501.420.001.900", "Сталь 38ХГМ/100/45", length = 200, cLength = 204, cQuantity = 1, optQuantity = 6) ::
-          Result("86501.420.001.900", "Сталь 38ХГМ/100/45", length = 200, cLength = 1200, cQuantity = 6, optQuantity = 6) :: Nil),
-        "86501.420.009.111" -> (Result("86501.420.009.111", "Сталь 38ХГМ/100/45", length = 120, cLength = 480, cQuantity = 4, optQuantity = 4) :: Nil),
-        "94100.001.007.072" -> (Result("94100.001.007.072", "Сталь 38ХГМ/100/45", length = 170, cLength = 684, cQuantity = 4, optQuantity = 3) ::
-          Result("94100.001.007.072", "Сталь 38ХГМ/100/45", length = 170, cLength = 684, cQuantity = 4, optQuantity = 3) :: Nil)
-      )
-
-      val actual = distributeWithGroup(map, lenghtThreshold, minLenght, log)
-      1 === 1
-    }
-  }*/
 }

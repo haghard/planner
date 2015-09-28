@@ -62,14 +62,8 @@ package object izmeron {
         to.copy(cQuantity = to.cQuantity + 1, cLength = to.cLength + from.length))
   }
 
-  case class Result(kd: String, groupKey: String = "",
-                    length: Int = 0, cLength: Int = 0,
-                    cQuantity: Int = 0, optQuantity: Int = 0,
-                    multiplicity: Int = 0, minQuant: Int = 0,
-                    profit: Int = 0) {
-    override def toString =
-      s"[$kd - $groupKey; length:$length; cLength:$cLength; cQuantity:$cQuantity; optQuantity:$optQuantity]"
-  }
+  case class Result(kd: String, groupKey: String = "", length: Int = 0, cLength: Int = 0,
+                    cQuantity: Int = 0, optQuantity: Int = 0, multiplicity: Int = 0, minQuant: Int = 0, profit: Int = 0)
 
   case class RawResult(kd: String, groupKey: String, qOptimal: Int, lenght: Int, minLenght: Int, techProfit: Int,
                        minQuantity: Int, multiplicity: Int)
@@ -103,14 +97,13 @@ package object izmeron {
   }
 
   case class StockUnit(id: Int, kdKey: String, group: String, length: Int)
-
   case class Provision(kdKey: String = "", length: Int = 0, stocks: List[Int] = Nil)
 
-  private def create(r: Result, ind: Int): StockUnit = StockUnit(ind, r.kd, r.groupKey, r.length)
+  private[izmeron] def cuttingStockProblem(group: List[Result], threshold: Int, minLenght: Int,
+                                           log: org.apache.log4j.Logger): List[Combination] = {
+    def unit(r: Result, ind: Int): StockUnit =
+      StockUnit(ind, r.kd, r.groupKey, r.length)
 
-  def cuttingStockProblem(group: List[Result], threshold: Int, minLenght: Int,
-                          log: org.apache.log4j.Logger): List[Combination] = {
-    val gk = group.head.groupKey
     val groupedMap = group./:(collection.mutable.Map[String, List[Result]]()) { (map, c) ⇒
       if ((c.kd ne null) && (c.kd.length > 0))
         map += (c.kd -> (c :: map.getOrElse(c.kd, List.empty[Result])))
@@ -130,20 +123,21 @@ package object izmeron {
           rest = threshold - c.cLength) :: acc
       }
     } else if (groupedMap.keySet.size >= 2) {
+      val gk = group.head.groupKey
       log.debug(s"CuttingStockProblem with: $group")
-      val expanded = groupedMap./:(List.empty[StockUnit]) { (acc, c) ⇒
+      val flatList = groupedMap./:(List.empty[StockUnit]) { (acc, c) ⇒
         var ind = 0
         acc ::: c._2.flatMap { r ⇒
           List.fill(r.cQuantity) {
             ind += 1
-            create(r, ind)
+            unit(r, ind)
           }
         }
       }
-      log.debug(s"Expanded with: $expanded")
+      log.debug(s"Expanded with: $flatList")
 
       var provision: List[Provision] = Nil
-      for ((k, list) ← expanded.groupBy(_.kdKey)) {
+      for ((k, list) ← flatList.groupBy(_.kdKey)) {
         var r = Provision()
         var sumLenght = 0
         for (el ← list) {
@@ -181,40 +175,47 @@ package object izmeron {
       log.debug(s"LensCounts: $lensCounts")
       log.debug(s"lenMapping: $lenMapping")
 
-      collect(blocks, quantities, threshold, log, Nil).fold(List.empty[Combination]) {
+      collect(blocks, quantities, minLenght, threshold, log, Nil).fold(List.empty[Combination]) {
         _.map { cmb ⇒
           cmb.copy(groupKey = gk, sheets =
-            cmb.sheets.map { sheet ⇒
+            cmb.sheets.flatMap { sheet ⇒
               val list = lenMapping(sheet.lenght)
-              if (sheet.quantity == 1)
+              if (sheet.quantity == 1) {
                 lenMapping += (sheet.lenght -> list.tail)
-              else
+                sheet.copy(kd = list.head) :: Nil
+              } else {
+                @tailrec def collect0(n: Int, scr: List[String], acc: List[Sheet]): List[Sheet] =
+                  if (n > 0) collect0(n - 1, scr.tail, sheet.copy(kd = scr.head, quantity = 1) :: acc)
+                  else acc
+
                 lenMapping += (sheet.lenght -> list.tail.drop(sheet.quantity - 1))
-              sheet.copy(kd = list.head)
+                collect0(sheet.quantity, list, Nil)
+              }
             })
         }
       }
     } else Nil
   }
 
-  def collect(blocks: Array[Int], quantities: Array[Int],
-              sheetLength: Int, log: org.apache.log4j.Logger,
-              items: List[Combination]): Option[List[Combination]] = {
+  private[izmeron] def collect(blocks: Array[Int], quantities: Array[Int],
+                               minLenght: Int, sheetLength: Int,
+                               log: org.apache.log4j.Logger,
+                               items: List[Combination]): Option[List[Combination]] = {
     cutNext(blocks, quantities, sheetLength, log) flatMap { cmb ⇒
       val (b, q) = crossOut(cmb)
       if (q.length > 0) {
-
         //artificial part
-        if (q.length == 2 && (b(0) + b(0)) <= sheetLength) {
+        if (q.length == 2 && (b(0) < minLenght || b(1) < minLenght) && (b(0) + b(0)) <= sheetLength) {
           val artificial = Combination(List(Sheet(lenght = b(0), quantity = 1), Sheet(lenght = b(1), quantity = 1)), sheetLength - (b(0) + b(1)))
           val (bA, qA) = crossOut((artificial, b, q))
-          collect(bA, qA, sheetLength, log, artificial :: cmb._1 :: items)
-        } else collect(b, q, sheetLength, log, cmb._1 :: items)
+          if (bA.length > 0) collect(bA, qA, minLenght, sheetLength, log, artificial :: cmb._1 :: items)
+          else Option(artificial :: cmb._1 :: items)
+        } else collect(b, q, minLenght, sheetLength, log, cmb._1 :: items)
       } else Option(cmb._1 :: items)
     }
   }
 
-  def crossOut(cmb: (Combination, Array[Int], Array[Int])): (Array[Int], Array[Int]) = {
+  private def crossOut(cmb: (Combination, Array[Int], Array[Int])): (Array[Int], Array[Int]) = {
     val blocks = cmb._2.toBuffer
     val quantities = cmb._3.toBuffer
     for (c ← cmb._1.sheets) {
@@ -239,21 +240,22 @@ package object izmeron {
 
   import com.izmeron.CuttingStockProblem
   import java.util.{ Map ⇒ JMap, HashMap ⇒ JHashMap }
-  def cutNext(blocks: Array[Int], quantities: Array[Int],
-              sheetLength: Int, log: org.apache.log4j.Logger): Option[(Combination, Array[Int], Array[Int])] = {
-
+  private def cutNext(blocks: Array[Int], quantities: Array[Int],
+                      sheetLength: Int, log: org.apache.log4j.Logger): Option[(Combination, Array[Int], Array[Int])] = {
     val quantities0 = Array.fill(quantities.size)(0)
     val blocks0 = Array.fill(blocks.size)(0)
     Array.copy(quantities, 0, quantities0, 0, quantities.size)
     Array.copy(blocks, 0, blocks0, 0, blocks.size)
 
     @tailrec def loop(problem: CuttingStockProblem, result: List[Combination],
-                      error: Boolean): List[Combination] =
+                      error: Boolean): List[Combination] = {
       if (problem.hasMoreCombinations && !error) {
         var wasError = false
         var sheets: List[Sheet] = List.empty
         val map: JMap[Integer, Integer] = Try(problem.nextBatch)
-          .getOrElse { wasError = true; new JHashMap[Integer, Integer](1) }
+          .getOrElse {
+            wasError = true; new JHashMap[Integer, Integer](1)
+          }
         val iter = map.entrySet.iterator
         var sum = 0
         var k = 0
@@ -267,7 +269,8 @@ package object izmeron {
         }
         loop(problem, Combination(sheets, sheetLength - sum) :: result, wasError)
       } else result
-
+    }
+    //
     val combinations = loop(new CuttingStockProblem(sheetLength, blocks, quantities), Nil, false)
     combinations.headOption.map { head ⇒
       combinations./:(head) { (acc, c) ⇒
@@ -279,7 +282,7 @@ package object izmeron {
     }.map((_, blocks0, quantities0))
   }
 
-  def groupByOptimalNumber(ord: Order, threshold: Int, minLenght: Int, log: org.apache.log4j.Logger)(rr: RawResult): List[Result] = {
+  private[izmeron] def groupByOptimalNumber(ord: Order, threshold: Int, minLenght: Int, log: org.apache.log4j.Logger)(rr: RawResult): List[Result] = {
     var buffer: List[Result] = Nil
     val map = mutable.Map[Long, List[Result]]().withDefaultValue(Nil)
     var quantity = 0
@@ -314,7 +317,7 @@ package object izmeron {
     result
   }
 
-  def distributeWithinGroup(threshold: Int, minLenght: Int, log: org.apache.log4j.Logger)(list: List[Result]): List[Result] = {
+  private[izmeron] def distributeWithinGroup(threshold: Int, minLenght: Int, log: org.apache.log4j.Logger)(list: List[Result]): List[Result] = {
     val result = if (list.size > 1 && (list.minBy(_.cQuantity).cQuantity != list.head.optQuantity)) {
       var cnt = 0
       var ind = 0
@@ -337,7 +340,7 @@ package object izmeron {
     revisitSum(result)
   }
 
-  def revisitSum(list: List[Result]) =
+  private def revisitSum(list: List[Result]) =
     list.map { item ⇒
       if (item.cQuantity == item.optQuantity) item
       else {
