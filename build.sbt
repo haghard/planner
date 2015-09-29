@@ -49,16 +49,12 @@ resolvers ++= Seq(
   "Local Maven Repository" at "file:///" + localMvnRepo,
   "maven central"          at "http://repo.maven.apache.org/maven2",
   "Scalaz"                 at "http://dl.bintray.com/scalaz/releases",
-  "Twitter Maven"          at "http://maven.twttr.com",
   "jboss repo"             at "http://repository.jboss.org/nexus/content/groups/public-jboss/"
 )
 
 libraryDependencies ++= Seq(
   "log4j"               %   "log4j"                   %   "1.2.14",
   "com.typesafe"        %   "config"                  %   "1.3.0",
-  //"com.twitter"         %%  "algebird-core"           %   "0.11.0",
-  //"com.twitter"         %%  "summingbird-core"        %   "0.8.0",
-  "com.twitter"         %%  "scalding-core"           %   "0.15.0",
   "net.databinder"      %%  "unfiltered-netty-server" %   "0.8.4",
   "io.spray"            %%  "spray-json"              %   "1.3.2",
   "com.nrinaudo"        %%  "scalaz-stream-csv"       %   "0.1.3",
@@ -69,7 +65,8 @@ libraryDependencies ++= Seq(
 
 libraryDependencies ++= Seq(
   "org.specs2"        %%  "specs2-core"       %   "3.2"     % "test" withSources(),
-  "org.scalatest"     %%  "scalatest"         %   "2.1.4"   % "test"
+  "org.scalatest"     %%  "scalatest"         %   "2.2.5"   % "test",
+  "org.scalacheck"    %%  "scalacheck"        %   "1.12.4"  % "test"
 )
 
 scalacOptions ++= Seq(

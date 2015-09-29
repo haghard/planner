@@ -40,16 +40,12 @@ public class CuttingStockProblem {
       this.max = max;
       this.block = block;
       qty = quantity;
-      doIt();
+      initialize();
     }
   }
 
-  private void doIt() {
-    initialize();
-  }
-
   private void initialize() {
-    store = new ArrayList();
+    store = new ArrayList<>();
     waste = 0;
     counter = 0;
     sort();
@@ -171,7 +167,7 @@ public class CuttingStockProblem {
 
       showComb(0, store);
     } else {
-      tempMap = new HashMap();
+      tempMap = new HashMap<Integer,Integer>();
 
       for(i = 0; i < total; ++i) {
         if(tempCombination[i] != 0) {

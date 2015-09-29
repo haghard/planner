@@ -15,9 +15,7 @@
 package com
 
 import java.util.concurrent.Executors._
-
 import scala.annotation.tailrec
-import scala.collection.mutable.ArrayBuffer
 import scala.util.Try
 import scalaz.\/
 
@@ -33,11 +31,14 @@ package object izmeron {
 
   type Or = String \/ RawResult
   val empty = ""
+
+  //Fancy symbol from 1C provided file
   val cvsSpace = 160.toChar.toString
 
   val PlannerEx = newFixedThreadPool(Runtime.getRuntime.availableProcessors(), new NamedThreadFactory("planner"))
 
   case class Order(kd: String, quantity: Int)
+  case class Version(major: Int, minor: Int, bf: Int)
 
   implicit val rowReader0 = RowReader(rec ⇒ Order(rec(0), rec(1).toInt))
 
@@ -78,8 +79,6 @@ package object izmeron {
       s"$namePrefix-${threadNumber.getAndIncrement()}", 0L)
   }
 
-  case class Version(major: Int, minor: Int, bf: Int)
-
   def Log4jSink: SinkM[scalaz.Id.Id, Etalon] = new FoldM[scalaz.Id.Id, Etalon, Unit] {
     private val name = "origami-fold-logger"
     override type S = org.apache.log4j.Logger
@@ -99,6 +98,13 @@ package object izmeron {
   case class StockUnit(id: Int, kdKey: String, group: String, length: Int)
   case class Provision(kdKey: String = "", length: Int = 0, stocks: List[Int] = Nil)
 
+  val coefficient = 1.2
+
+  /**
+   *
+   *
+   *
+   */
   private[izmeron] def cuttingStockProblem(group: List[Result], threshold: Int, minLenght: Int,
                                            log: org.apache.log4j.Logger): List[Combination] = {
     def unit(r: Result, ind: Int): StockUnit =
@@ -134,7 +140,6 @@ package object izmeron {
           }
         }
       }
-      log.debug(s"Expanded with: $flatList")
 
       var provision: List[Provision] = Nil
       for ((k, list) ← flatList.groupBy(_.kdKey)) {
@@ -153,6 +158,7 @@ package object izmeron {
         if (r.stocks.headOption.isDefined)
           provision = r.copy(length = sumLenght) :: provision
       }
+
       log.debug(s"Provision: $provision")
 
       val lensCounts = provision./:(mutable.Map[Int, Int]().withDefaultValue(0)) { (acc, c) ⇒
@@ -184,12 +190,12 @@ package object izmeron {
                 lenMapping += (sheet.lenght -> list.tail)
                 sheet.copy(kd = list.head) :: Nil
               } else {
-                @tailrec def collect0(n: Int, scr: List[String], acc: List[Sheet]): List[Sheet] =
-                  if (n > 0) collect0(n - 1, scr.tail, sheet.copy(kd = scr.head, quantity = 1) :: acc)
+                @tailrec def redistribute(n: Int, scr: List[String], acc: List[Sheet]): List[Sheet] =
+                  if (n > 0) redistribute(n - 1, scr.tail, sheet.copy(kd = scr.head, quantity = 1) :: acc)
                   else acc
 
                 lenMapping += (sheet.lenght -> list.tail.drop(sheet.quantity - 1))
-                collect0(sheet.quantity, list, Nil)
+                redistribute(sheet.quantity, list, Nil)
               }
             })
         }
@@ -197,19 +203,62 @@ package object izmeron {
     } else Nil
   }
 
+  private def flatQuantities(blocks: Array[Int], quantities: Array[Int]): List[Int] = {
+    var buffer = List.empty[Int]
+    var i = 0
+    while (i < quantities.size) {
+      buffer = List.fill(quantities(i))(blocks(i)) ++ buffer
+      i += 1
+    }
+    buffer
+  }
+
   private[izmeron] def collect(blocks: Array[Int], quantities: Array[Int],
                                minLenght: Int, sheetLength: Int,
                                log: org.apache.log4j.Logger,
                                items: List[Combination]): Option[List[Combination]] = {
+    @tailrec def distributeLast(currentLen: Int, min: Int, acc: List[Sheet],
+                                combination: Combination): (List[Sheet], Combination) = {
+      val sheet = combination.sheets.head
+      val updatedLen = currentLen + (sheet.lenght * sheet.quantity)
+      if (updatedLen < min) distributeLast(updatedLen, min, Sheet(sheet.kd, sheet.lenght, sheet.quantity) :: acc,
+        combination.copy(sheets = combination.sheets.tail))
+      else (Sheet(sheet.kd, sheet.lenght, sheet.quantity) :: acc, combination.copy(sheets = combination.sheets.tail, rest = combination.rest + sheet.lenght))
+    }
+
     cutNext(blocks, quantities, sheetLength, log) flatMap { cmb ⇒
       val (b, q) = crossOut(cmb)
-      if (q.length > 0) {
-        //artificial part
-        if (q.length == 2 && (b(0) < minLenght || b(1) < minLenght) && (b(0) + b(0)) <= sheetLength) {
-          val artificial = Combination(List(Sheet(lenght = b(0), quantity = 1), Sheet(lenght = b(1), quantity = 1)), sheetLength - (b(0) + b(1)))
-          val (bA, qA) = crossOut((artificial, b, q))
-          if (bA.length > 0) collect(bA, qA, minLenght, sheetLength, log, artificial :: cmb._1 :: items)
-          else Option(artificial :: cmb._1 :: items)
+
+      if (q.size > 0) {
+        //distribute manually part
+        var i = 0
+        var balanceLen = 0
+        while (i < q.size) {
+          balanceLen += q(i) * b(i)
+          i += 1
+        }
+
+        if (q.size >= 2 && (balanceLen / q.reduce(_ + _)) < (minLenght * coefficient)) {
+          val sortedBuffer = flatQuantities(b, q).sorted
+          if (sortedBuffer.reduce(_ + _) <= sheetLength) {
+            val list = sortedBuffer.map(i ⇒ Sheet(lenght = i, quantity = 1))
+            Option(List(Combination(sheets = list, rest = sheetLength - list./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity))))
+          } else {
+            Option {
+              (sortedBuffer.grouped(2).map { list ⇒
+                list.map(i ⇒ Sheet(lenght = i, quantity = 1))
+              }).map(list ⇒ Combination(sheets = list, rest = sheetLength - list./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity))).toList
+            }
+          }
+        } else if (balanceLen < minLenght) {
+          val sorted = cmb._1.copy(sheets = cmb._1.sheets.flatMap { s ⇒
+            List.fill(s.quantity)(Sheet(s.kd, s.lenght, 1))
+          }.sortWith(_.lenght - _.lenght < 0))
+          val firstPart = flatQuantities(b, q)./:(List.empty[Sheet])((acc, c) ⇒ Sheet(lenght = c, quantity = 1) :: acc)
+          val (secondPart, old) = distributeLast(balanceLen, minLenght, Nil, sorted)
+          val updatedSheets = firstPart ::: secondPart
+          val sumLen = updatedSheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)
+          Option(List(Combination(sheets = updatedSheets, groupKey = old.groupKey, rest = sheetLength - sumLen), old))
         } else collect(b, q, minLenght, sheetLength, log, cmb._1 :: items)
       } else Option(cmb._1 :: items)
     }
@@ -220,7 +269,7 @@ package object izmeron {
     val quantities = cmb._3.toBuffer
     for (c ← cmb._1.sheets) {
       var ind = 0
-      while (blocks(ind) != c.lenght) { //IndexOutOfBound
+      while (blocks(ind) != c.lenght) { //What about IndexOutOfBound
         ind += 1
       }
 
@@ -230,7 +279,7 @@ package object izmeron {
       } else if (cur == c.quantity) {
         blocks.remove(ind)
         quantities.remove(ind)
-      } else throw new Exception("Can't cross out more than we have") //error
+      } else throw new Exception("Can't cross out more than we got")
     }
     (blocks.toArray, quantities.toArray)
   }
@@ -247,8 +296,8 @@ package object izmeron {
     Array.copy(quantities, 0, quantities0, 0, quantities.size)
     Array.copy(blocks, 0, blocks0, 0, blocks.size)
 
-    @tailrec def loop(problem: CuttingStockProblem, result: List[Combination],
-                      error: Boolean): List[Combination] = {
+    @tailrec def fetch(problem: CuttingStockProblem, result: List[Combination],
+                       error: Boolean): List[Combination] = {
       if (problem.hasMoreCombinations && !error) {
         var wasError = false
         var sheets: List[Sheet] = List.empty
@@ -267,11 +316,11 @@ package object izmeron {
           sum += k * v
           sheets = Sheet(lenght = k, quantity = v) :: sheets
         }
-        loop(problem, Combination(sheets, sheetLength - sum) :: result, wasError)
+        fetch(problem, Combination(sheets, sheetLength - sum) :: result, wasError)
       } else result
     }
     //
-    val combinations = loop(new CuttingStockProblem(sheetLength, blocks, quantities), Nil, false)
+    val combinations = fetch(new CuttingStockProblem(sheetLength, blocks, quantities), Nil, false)
     combinations.headOption.map { head ⇒
       combinations./:(head) { (acc, c) ⇒
         if (acc == c) c

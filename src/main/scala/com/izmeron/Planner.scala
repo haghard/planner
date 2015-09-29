@@ -93,9 +93,6 @@ trait Planner {
   def createIndex: Task[(Throwable \/ mutable.Map[String, RawResult], Option[FinalizersException])] =
     Task.fork((buildIndex run csvProcess).attemptRun)(PlannerEx)
 
-  /*def createIndex2: Task[(Throwable \/ mutable.Map[String, RawResult], Option[FinalizersException])] =
-    Task.fork(groupByKey*/
-
   /**
    *
    * @param ord

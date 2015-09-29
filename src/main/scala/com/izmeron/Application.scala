@@ -26,7 +26,7 @@ object Application extends App {
   val path = cfg.getConfig("planner").getString("indexFile")
 
   val server = new PlannerServer(path, httpPort, org.apache.log4j.Logger.getLogger("planner-server"),
-    minLenght, lenghtThreshold, Version(0, 0, 1)) with Planner
+    minLenght, lenghtThreshold, Version(0, 1, 0)) with Planner
   server.start
 
   Runtime.getRuntime.addShutdownHook(new Thread(new Runnable {

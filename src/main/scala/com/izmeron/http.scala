@@ -97,6 +97,10 @@ object http {
               }).start()
           }
           log.debug(s"★ ★ ★ ★ ★ ★  Http server started on $host:$httpPort  ★ ★ ★ ★ ★ ★")
+
+        case -\/(ex) ⇒
+          log.error(s"Error while building index: ${ex.getMessage}")
+          System.exit(-1)
         case \/-((-\/(ex), None)) ⇒
           log.error(s"Error while building index: ${ex.getMessage}")
           System.exit(-1)
