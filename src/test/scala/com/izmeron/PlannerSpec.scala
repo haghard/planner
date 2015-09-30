@@ -19,6 +19,7 @@ import org.specs2.mutable.Specification
 class PlannerSpec extends Specification {
   val lenghtThreshold = 1200
   val minLenght = 400
+  val c = 1.2
   val logger = org.apache.log4j.Logger.getLogger("test-planner")
 
   /*
@@ -88,11 +89,11 @@ class PlannerSpec extends Specification {
           Result("86401.905", "Сталь 20Х/120/56", 564, 1128, 2, 2, 1, 1, 0) ::
           Result("86602.038", "Сталь 20Х/120/56", 270, 1080, 4, 4, 1, 1, 0) :: Nil
 
-      val combinations = cuttingStockProblem(rs, threshold, minLenght, logger)
+      val combinations = cuttingStockProblem(rs, threshold, minLenght, c, logger)
 
-      val sumLen = combinations.map(_.sheets.foldLeft(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).reduce(_ + _)
+      val sumLen = combinations.map(_.sheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).sum
       val actual = combinations.find(e ⇒ threshold - e.rest < minLenght)
-      val balance = combinations.map(_.rest).reduce(_ + _)
+      val balance = combinations.map(_.rest).sum
 
       logger.debug(s"Sum-Lenght $sumLen")
       logger.debug(s"Combinations $combinations")
@@ -108,11 +109,11 @@ class PlannerSpec extends Specification {
           Result("93901.00.05.201", "Сталь 20Х2Н4А/115/45", 514, 1028, 2, 2, 1, 1, 0) ::
           Result("93901.00.05.301", "Сталь 20Х2Н4А/115/45", 514, 1028, 2, 2, 1, 1, 0) :: Nil
 
-      val combinations = cuttingStockProblem(rs, threshold, minLenght, logger)
+      val combinations = cuttingStockProblem(rs, threshold, minLenght, c, logger)
 
-      val sumLen = combinations.map(_.sheets.foldLeft(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).reduce(_ + _)
+      val sumLen = combinations.map(_.sheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).sum
       val actual = combinations.find(e ⇒ threshold - e.rest < minLenght)
-      val balance = combinations.map(_.rest).reduce(_ + _)
+      val balance = combinations.map(_.rest).sum
 
       logger.debug(s"Sum-Lenght $sumLen")
       logger.debug(s"Combinations $combinations")
@@ -129,11 +130,11 @@ class PlannerSpec extends Specification {
           Result("94100.001.007.072", "Сталь 38ХГМ/100/45", 170, 684, 4, 3, 1, 1, 0),
           Result("94100.001.007.072", "Сталь 38ХГМ/100/45", 170, 684, 4, 3, 1, 1, 0))
 
-      val combinations = cuttingStockProblem(rs, threshold, minLenght, logger)
+      val combinations = cuttingStockProblem(rs, threshold, minLenght, c, logger)
 
-      val sumLen = combinations.map(_.sheets.foldLeft(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).reduce(_ + _)
+      val sumLen = combinations.map(_.sheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).sum
       val actual = combinations.find(e ⇒ threshold - e.rest < minLenght)
-      val balance = combinations.map(_.rest).reduce(_ + _)
+      val balance = combinations.map(_.rest).sum
 
       logger.debug(s"Sum-Lenght $sumLen")
       logger.debug(s"Combinations $combinations")
@@ -145,11 +146,11 @@ class PlannerSpec extends Specification {
     "scenario3" in {
       val rs = Result("94900.04.701", "Сталь 38ХГМ/260/78", 437, 874, 2, 2, 1, 1, 0) ::
         Result("94900.04.751", "Сталь 38ХГМ/260/78", 437, 874, 2, 2, 1, 1, 0) :: Nil
-      val combinations = cuttingStockProblem(rs, threshold, minLenght, logger)
+      val combinations = cuttingStockProblem(rs, threshold, minLenght, c, logger)
 
-      val sumLen = combinations.map(_.sheets.foldLeft(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).reduce(_ + _)
+      val sumLen = combinations.map(_.sheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).sum
       val actual = combinations.find(e ⇒ threshold - e.rest < minLenght)
-      val balance = combinations.map(_.rest).reduce(_ + _)
+      val balance = combinations.map(_.rest).sum
 
       logger.debug(s"Sum-Lenght $sumLen")
       logger.debug(s"Combinations $combinations")
@@ -164,10 +165,10 @@ class PlannerSpec extends Specification {
           Result("94900.04.751", "Сталь 38ХГМ/260/78", 437, 874, 2, 2, 1, 1, 0),
           Result("94900.04.751", "Сталь 38ХГМ/260/78", 437, 874, 2, 2, 1, 1, 0))
 
-      val combinations = cuttingStockProblem(rs, threshold, minLenght, logger)
-      val sumLen = combinations.map(_.sheets.foldLeft(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).reduce(_ + _)
+      val combinations = cuttingStockProblem(rs, threshold, minLenght, c, logger)
+      val sumLen = combinations.map(_.sheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).sum
       val actual = combinations.find(e ⇒ threshold - e.rest < minLenght)
-      val balance = combinations.map(_.rest).reduce(_ + _)
+      val balance = combinations.map(_.rest).sum
 
       logger.debug(s"Sum-Lenght $sumLen")
       logger.debug(s"Combinations $combinations")
@@ -182,10 +183,10 @@ class PlannerSpec extends Specification {
           Result("94900.04.751", "Сталь 38ХГМ/260/78", 437, 874, 2, 2, 1, 1, 0),
           Result("94900.04.881", "Сталь 38ХГМ/260/78", 502, 1004, 2, 2, 1, 1, 0))
 
-      val combinations = cuttingStockProblem(rs, threshold, minLenght, logger)
-      val sumLen = combinations.map(_.sheets.foldLeft(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).reduce(_ + _)
+      val combinations = cuttingStockProblem(rs, threshold, minLenght, c, logger)
+      val sumLen = combinations.map(_.sheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).sum
       val actual = combinations.find(e ⇒ threshold - e.rest < minLenght)
-      val balance = combinations.map(_.rest).reduce(_ + _)
+      val balance = combinations.map(_.rest).sum
 
       logger.debug(s"Sum-Lenght $sumLen")
       logger.debug(s"Combinations $combinations")
@@ -210,11 +211,11 @@ class PlannerSpec extends Specification {
           Result("93900.00.06.026", "Сталь 38ХГМ/120/32", 390, 780, 2, 2, 1, 1, 0), Result("93900.00.04.015", "Сталь 38ХГМ/120/32", 403, 806, 2, 2, 1, 1, 0),
           Result("93930.03.015", "Сталь 38ХГМ/120/32", 403, 806, 2, 2, 1, 1, 0), Result("93900.00.06.005", "Сталь 38ХГМ/120/32", 403, 806, 2, 2, 1, 1, 0),
           Result("93930.04.016", "Сталь 38ХГМ/120/32", 403, 806, 2, 2, 1, 1, 0))
-      val combinations = cuttingStockProblem(rs, threshold, minLenght, logger)
+      val combinations = cuttingStockProblem(rs, threshold, minLenght, c, logger)
 
-      val sumLen = combinations.map(_.sheets.foldLeft(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).reduce(_ + _)
+      val sumLen = combinations.map(_.sheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).sum
       val actual = combinations.find(e ⇒ threshold - e.rest < minLenght)
-      val balance = combinations.map(_.rest).reduce(_ + _)
+      val balance = combinations.map(_.rest).sum
 
       logger.debug(s"Sum-Lenght $sumLen")
       logger.debug(s"Combinations $combinations")
@@ -232,11 +233,11 @@ class PlannerSpec extends Specification {
           Result("EF", "Сталь 38ХГМ-260-78", 432, 1728, 4, 4, 1, 1, 0), Result("RD", "Сталь 38ХГМ-260-78", 368, 1104, 3, 3, 1, 1, 0),
           Result("DV", "Сталь 38ХГМ-260-78", 399, 1596, 4, 4, 1, 1, 0), Result("TU", "Сталь 38ХГМ-260-78", 404, 404, 1, 1, 1, 1, 0))
 
-      val combinations = cuttingStockProblem(rs, threshold, 400, logger)
+      val combinations = cuttingStockProblem(rs, threshold, 400, c, logger)
 
-      val sumLen = combinations.map(_.sheets.foldLeft(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).reduce(_ + _)
+      val sumLen = combinations.map(_.sheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).sum
       val actual = combinations.find(e ⇒ threshold - e.rest < minLenght)
-      val balance = combinations.map(_.rest).reduce(_ + _)
+      val balance = combinations.map(_.rest).sum
 
       logger.debug(s"Sum-Lenght $sumLen")
       logger.debug(s"Combinations $combinations")
@@ -253,10 +254,10 @@ class PlannerSpec extends Specification {
         Result("YS", "Сталь 38ХГМ-260-78", 357, 1428, 4, 4, 1, 1, 0), Result("RO", "Сталь 38ХГМ-260-78", 446, 892, 2, 2, 1, 1, 0),
         Result("RT", "Сталь 38ХГМ-260-78", 401, 401, 1, 1, 1, 1, 0))
 
-      val combinations = cuttingStockProblem(in, threshold, 400, logger)
-      val sumLen = combinations.map(_.sheets.foldLeft(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).reduce(_ + _)
+      val combinations = cuttingStockProblem(in, threshold, 400, c, logger)
+      val sumLen = combinations.map(_.sheets.foldLeft(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).sum
       val actual = combinations.find(e ⇒ threshold - e.rest < minLenght)
-      val balance = combinations.map(_.rest).reduce(_ + _)
+      val balance = combinations.map(_.rest).sum
 
       logger.debug(s"Sum-Lenght $sumLen")
       logger.debug(s"Combinations $combinations")
@@ -273,10 +274,10 @@ class PlannerSpec extends Specification {
         Result("BA", "Сталь 38ХГМ-260-78", 423, 846, 2, 2, 1, 1, 0), Result("UU", "Сталь 38ХГМ-260-78", 403, 1209, 3, 3, 1, 1, 0),
         Result("IA", "Сталь 38ХГМ-260-78", 418, 418, 1, 1, 1, 1, 0))
 
-      val combinations = cuttingStockProblem(in, threshold, 400, logger)
-      val sumLen = combinations.map(_.sheets.foldLeft(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).reduce(_ + _)
+      val combinations = cuttingStockProblem(in, threshold, 400, c, logger)
+      val sumLen = combinations.map(_.sheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).sum
       val actual = combinations.find(e ⇒ threshold - e.rest < minLenght)
-      val balance = combinations.map(_.rest).reduce(_ + _)
+      val balance = combinations.map(_.rest).sum
 
       logger.debug(s"Sum-Lenght $sumLen")
       logger.debug(s"Combinations $combinations")
@@ -293,10 +294,10 @@ class PlannerSpec extends Specification {
         Result("OU", "Сталь 38ХГМ-260-78", 394, 1576, 4, 4, 1, 1, 0), Result("YD", "Сталь 38ХГМ-260-78", 394, 1182, 3, 3, 1, 1, 0),
         Result("YO", "Сталь 38ХГМ-260-78", 393, 1572, 4, 4, 1, 1, 0))
 
-      val combinations = cuttingStockProblem(in, threshold, 400, logger)
-      val sumLen = combinations.map(_.sheets.foldLeft(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).reduce(_ + _)
+      val combinations = cuttingStockProblem(in, threshold, 400, c, logger)
+      val sumLen = combinations.map(_.sheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).sum
       val actual = combinations.find(e ⇒ threshold - e.rest < minLenght)
-      val balance = combinations.map(_.rest).reduce(_ + _)
+      val balance = combinations.map(_.rest).sum
 
       logger.debug(s"Sum-Lenght $sumLen")
       logger.debug(s"Combinations $combinations")
@@ -320,10 +321,10 @@ class PlannerSpec extends Specification {
         Result("WV", "Сталь 38ХГМ-260-78", 421, 1684, 4, 4, 1, 1, 0), Result("BF", "Сталь 38ХГМ-260-78", 375, 1500, 4, 4, 1, 1, 0),
         Result("HN", "Сталь 38ХГМ-260-78", 431, 431, 1, 1, 1, 1, 0))
 
-      val combinations = cuttingStockProblem(in, threshold, 400, logger)
-      val sumLen = combinations.map(_.sheets.foldLeft(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).reduce(_ + _)
+      val combinations = cuttingStockProblem(in, threshold, 400, c, logger)
+      val sumLen = combinations.map(_.sheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).sum
       val actual = combinations.find(e ⇒ threshold - e.rest < minLenght)
-      val balance = combinations.map(_.rest).reduce(_ + _)
+      val balance = combinations.map(_.rest).sum
 
       logger.debug(s"Sum-Lenght $sumLen")
       logger.debug(s"Combinations $combinations")

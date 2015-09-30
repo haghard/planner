@@ -65,12 +65,16 @@ object http {
 
     def errorResponse[A](error: String): ResponseFunction[A] = BadRequest ~> PlainTextContent ~> ResponseString(error + END)
 
+    def methodNotAllowed[A](error: String): ResponseFunction[A] = MethodNotAllowed ~> PlainTextContent ~> ResponseString(error + END)
+
     def errorResponse[A](error: Throwable): ResponseFunction[A] = errorResponse(error.toString)
   }
 
   class PlannerServer(override val path: String, httpPort: Int,
                       override val log: org.apache.log4j.Logger,
-                      override val minLenght: Int, override val lenghtThreshold: Int,
+                      override val minLenght: Int,
+                      override val lenghtThreshold: Int,
+                      override val coefficient: Double,
                       val v: Version) { mixin: Planner ⇒
 
     @volatile var http: Option[unfiltered.netty.Server] = None
@@ -82,14 +86,14 @@ object http {
       override val channels = new DefaultChannelGroup("Netty Unfiltered Server Channel Group", GlobalEventExecutor.INSTANCE)
     }
 
-    override def start = {
+    override def start() = {
       log.debug("★ ★ ★ ★ ★ ★  Index creation has been started  ★ ★ ★ ★ ★ ★")
       createIndex.runAsync {
         case \/-((\/-(index), None)) ⇒
           log.info("★ ★ ★  Index has been created  ★ ★ ★ ★ ★ ★")
           http = Option {
             unfiltered.netty.Server.bind(SocketBinding(httpPort, host))
-              .handler(new HttpNettyHandler(this, index, minLenght, lenghtThreshold))
+              .handler(new HttpNettyHandler(this, index, minLenght, lenghtThreshold, coefficient))
               .use(engine)
               .chunked(1048576)
               .beforeStop({
@@ -110,13 +114,13 @@ object http {
       }
     }
 
-    override def shutdown: Unit = http.foreach(_.stop())
+    override def shutdown(): Unit = http.foreach(_.stop())
   }
 
   @Sharable
   final class HttpNettyHandler(server: PlannerServer with Planner,
                                index: mutable.Map[String, RawResult],
-                               minLenght: Int, lenghtThreshold: Int) extends async.Plan
+                               minLenght: Int, lenghtThreshold: Int, coefficient: Double) extends async.Plan
       with ServerErrorResponse with AsyncContext {
     import spray.json._
     import scala.collection._
@@ -138,7 +142,7 @@ object http {
       }
       cs./:(init) { (acc, c) ⇒
         val cur = JsObject(
-          "sheet" -> JsArray(c.sheets.toVector.map(writerSheet.write(_))),
+          "sheet" -> JsArray(c.sheets.toVector.map(writerSheet.write)),
           "balance" -> JsNumber(c.rest),
           "lenght" -> JsNumber(lenghtThreshold - c.rest)
         )
@@ -169,8 +173,8 @@ object http {
       go(it)
     }
 
-    def workers(queue: scalaz.stream.async.mutable.Queue[List[Result]]): Process[Task, Process[Task, List[Combination]]] =
-      Process.range(0, limit).map(_ ⇒ queue.dequeue.map(cuttingStockProblem(_, lenghtThreshold, minLenght, server.log)))
+    def workers(coefficient: Double, queue: scalaz.stream.async.mutable.Queue[List[Result]]): Process[Task, Process[Task, List[Combination]]] =
+      Process.range(0, limit).map(_ ⇒ queue.dequeue.map(cuttingStockProblem(_, lenghtThreshold, minLenght, coefficient, server.log)))
 
     def inputReader(queue: scalaz.stream.async.mutable.Queue[List[Result]],
                     req: HttpRequest[ReceivedMessage])(implicit S: scalaz.concurrent.Strategy): Process[Task, Unit] =
@@ -200,14 +204,14 @@ object http {
           case POST(Path("/orders")) ⇒
             forkTask {
               val queue = scalaz.stream.async.boundedQueue[List[Result]](limit * limit)
-              (inputReader(queue, req).drain merge merge.mergeN(limit)(workers(queue)))
+              (inputReader(queue, req).drain merge merge.mergeN(limit)(workers(coefficient, queue)))
                 .foldMap(jsMapper(_))(JsValueM)
                 .runLast
                 .map { _.fold(errorResponse("empty response"))(json ⇒ jsonResponse(json.prettyPrint)) }
             }
 
           case invalid ⇒
-            responder.respond(errorResponse(s"Invalid request: ${invalid.method} ${invalid.uri}"))
+            responder.respond(methodNotAllowed(s"Method:${invalid.method} Uri:${invalid.uri}"))
         }
     }
   }

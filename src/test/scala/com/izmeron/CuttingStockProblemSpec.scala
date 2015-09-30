@@ -39,18 +39,18 @@ object CuttingStockProblemSpec extends Properties("CuttingStockProblemSpec") {
     )
   ) { list: List[Result] ⇒
 
-      if (list.size == Size && list.find(_.kd == "").isEmpty) {
+      if (list.size == Size && !list.exists(_.kd == "")) {
         logger.debug(s"in $count $list")
         count += 1
-        val combinations = cuttingStockProblem(list, threshold, minLenght, logger)
+        val combinations = cuttingStockProblem(list, threshold, minLenght, 1.2, logger)
 
-        val sumLen = combinations.map(_.sheets.foldLeft(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).reduce(_ + _)
+        val sumLen = combinations.map(_.sheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).sum
         val actual = combinations.find(e ⇒ threshold - e.rest < minLenght)
-        val balance = combinations.map(_.rest).reduce(_ + _)
+        val balance = combinations.map(_.rest).sum
 
         (list.size == Size) :| "Batch size isn't obeyed" &&
-          (actual.isDefined == false) :| "Impossible element has been found" &&
-          ((sumLen + balance) == combinations.size * threshold) :| "Final size isn't obeyed"
-      } else { (true == true) :| "Check nothing" }
+          actual.isEmpty :| "Impossible element has been found" &&
+          ((sumLen + balance) == combinations.size * threshold) :| "Final size isn't corresponded"
+      } else { true :| "Check nothing" }
     }
 }

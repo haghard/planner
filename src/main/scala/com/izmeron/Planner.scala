@@ -34,6 +34,8 @@ trait Planner {
 
   def minLenght: Int
 
+  def coefficient: Double
+
   def csvProcess: scalaz.stream.Process[Task, Etalon] =
     scalaz.stream.csv.rowsR[RawCsvLine](path, ';').map { raw ⇒
       Etalon(raw.kd, raw.name, raw.nameMat, raw.marka,
@@ -100,9 +102,9 @@ trait Planner {
    * @return
    */
   def plan(ord: com.izmeron.Order, index: mutable.Map[String, RawResult]): scalaz.stream.Process[Task, List[Result]] =
-    (Process.await(Task.delay(index.get(ord.kd))) { values: Option[RawResult] ⇒
+    Process.await(Task.delay(index.get(ord.kd))) { values: Option[RawResult] ⇒
       values.fold(Process.emit(-\/(ord.kd): Or)) { result: RawResult ⇒ Process.emit(\/-(result): Or) }
-    }).flatMap {
+    }.flatMap {
       _.fold({ kd ⇒
         log.error(s"Can't find kd:[$kd] in current index")
         Process.emit(List.empty[Result])
