@@ -21,7 +21,7 @@ import io.netty.channel.nio.NioEventLoopGroup
 import io.netty.util.concurrent.GlobalEventExecutor
 import unfiltered.Async
 import unfiltered.netty.async.Plan.Intent
-import unfiltered.netty.{ ReceivedMessage, SocketBinding, ServerErrorResponse, async }
+import unfiltered.netty.{ SocketBinding, ServerErrorResponse, async }
 import unfiltered.request._
 import unfiltered.response._
 
@@ -49,13 +49,9 @@ object http {
     }
 
     def forkTask(task: Task[ResponseFunction[Any]])(implicit responder: Async.Responder[Any], ctx: ExecutorService): Unit = {
-      try {
-        Task.fork(task)(ctx).runAsync {
-          case \/-(result) ⇒ responder.respond(result)
-          case -\/(error)  ⇒ responder.respond(errorResponse(error))
-        }
-      } catch {
-        case NonFatal(e) ⇒ responder.respond(errorResponse(e))
+      Task.fork(task)(ctx).runAsync {
+        case \/-(result) ⇒ responder.respond(result)
+        case -\/(error)  ⇒ responder.respond(errorResponse(error))
       }
     }
 
@@ -93,7 +89,7 @@ object http {
           log.info("★ ★ ★  Index has been created  ★ ★ ★ ★ ★ ★")
           http = Option {
             unfiltered.netty.Server.bind(SocketBinding(httpPort, host))
-              .handler(new HttpNettyHandler(this, index, minLenght, lenghtThreshold, coefficient))
+              .handler(new HttpNettyHandler(this, index, minLenght, lenghtThreshold, coefficient, log))
               .use(engine)
               .chunked(1048576)
               .beforeStop({
@@ -114,81 +110,20 @@ object http {
       }
     }
 
-    override def shutdown(): Unit = http.foreach(_.stop())
+    def shutdown(): Unit = http.foreach(_.stop())
   }
 
   @Sharable
-  final class HttpNettyHandler(server: PlannerServer with Planner,
-                               index: mutable.Map[String, RawResult],
-                               minLenght: Int, lenghtThreshold: Int, coefficient: Double) extends async.Plan
-      with ServerErrorResponse with AsyncContext {
-    import spray.json._
-    import scala.collection._
-    import scalaz.stream.merge
+  final class HttpNettyHandler(server: PlannerServer with Planner, index: mutable.Map[String, RawResult],
+                               val minLenght: Int, val lenghtThreshold: Int,
+                               coefficient: Double, val log: org.apache.log4j.Logger) extends async.Plan
+      with ServerErrorResponse
+      with AsyncContext
+      with ScalazProcessSupport {
+    import scalaz.stream.async
     import scalaz.stream.csv._
-    import scalaz.stream.Process
-    import scalaz.std.AllInstances._
+    import scalaz.stream.merge
 
-    val limit = Runtime.getRuntime.availableProcessors()
-    val loggerSink = scalaz.stream.sink.lift[Task, Iterable[Result]] { list ⇒
-      Task.delay(server.log.debug(s"order-line: $list"))
-    }
-
-    val jsMapper = { cs: List[Combination] ⇒
-      val init = JsObject("group" -> JsString(cs.head.groupKey), "body" -> JsArray())
-      val writerSheet = new spray.json.JsonWriter[Sheet] {
-        override def write(s: Sheet): JsValue =
-          JsObject("kd" -> JsString(s.kd), "lenght" -> JsNumber(s.lenght), "quantity" -> JsNumber(s.quantity))
-      }
-      cs./:(init) { (acc, c) ⇒
-        val cur = JsObject(
-          "sheet" -> JsArray(c.sheets.toVector.map(writerSheet.write)),
-          "balance" -> JsNumber(c.rest),
-          "lenght" -> JsNumber(lenghtThreshold - c.rest)
-        )
-        JsObject(
-          "group" -> acc.fields("group"),
-          "body" -> JsArray(acc.fields("body").asInstanceOf[JsArray].elements.:+(cur))
-        )
-      }
-    }
-
-    implicit val JsValueM = new scalaz.Monoid[JsObject] {
-      override def zero = JsObject("uri" -> JsString("/orders"), "body" -> JsArray())
-      override def append(f1: JsObject, f2: ⇒ JsObject): JsObject = {
-        (f1, f2) match {
-          case (f1: JsObject, f2: JsValue) ⇒
-            JsObject("uri" -> f1.fields("uri").asInstanceOf[JsString],
-              "body" -> JsArray(f1.fields("body").asInstanceOf[JsArray].elements.:+(f2)))
-        }
-      }
-    }
-
-    def queuePublisher(it: Iterator[List[Result]]): Process[Task, List[Result]] = {
-      def go(iter: Iterator[List[Result]]): Process[Task, List[Result]] =
-        Process.await(Task.delay(iter)) { iter ⇒
-          if (iter.hasNext) Process.emit(iter.next) ++ go(iter)
-          else Process.halt
-        }
-      go(it)
-    }
-
-    def workers(coefficient: Double, queue: scalaz.stream.async.mutable.Queue[List[Result]]): Process[Task, Process[Task, List[Combination]]] =
-      Process.range(0, limit).map(_ ⇒ queue.dequeue.map(cuttingStockProblem(_, lenghtThreshold, minLenght, coefficient, server.log)))
-
-    def inputReader(queue: scalaz.stream.async.mutable.Queue[List[Result]],
-                    req: HttpRequest[ReceivedMessage])(implicit S: scalaz.concurrent.Strategy): Process[Task, Unit] =
-      (merge.mergeN(limit)(rowsR[Order](req.inputStream, ';').map(server.plan(_, index)))(S) observe loggerSink)
-        .map { list ⇒ list.headOption.fold(immutable.Map[String, List[Result]]())(head ⇒ immutable.Map(head.groupKey -> list)) }
-        .foldMonoid
-        .flatMap { map ⇒ queuePublisher(map.values.iterator) to queue.enqueue }
-        .onComplete(scalaz.stream.Process.eval_ { server.log.debug("All input has been scheduled"); queue.close })
-
-    /**
-     *
-     *
-     * @return
-     */
     override def intent: Intent = {
       case req ⇒
         implicit val ex = PlannerEx
@@ -203,8 +138,8 @@ object http {
           //http POST http://127.0.0.1:9001/orders < ./cvs/order.csv
           case POST(Path("/orders")) ⇒
             forkTask {
-              val queue = scalaz.stream.async.boundedQueue[List[Result]](limit * limit)
-              (inputReader(queue, req).drain merge merge.mergeN(limit)(workers(coefficient, queue)))
+              val queue = async.boundedQueue[List[Result]](parallelism * parallelism)
+              (inputReader(rowsR[Order](req.inputStream, ';').map(server.plan(_, index)), queue).drain merge merge.mergeN(parallelism)(cuttingWorkers(coefficient, queue)))
                 .foldMap(jsMapper(_))(JsValueM)
                 .runLast
                 .map { _.fold(errorResponse("empty response"))(json ⇒ jsonResponse(json.prettyPrint)) }

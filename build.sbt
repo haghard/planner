@@ -32,6 +32,9 @@ scalacOptions ++= Seq(
 
 useJGit
 enablePlugins(GitVersioning)
+enablePlugins(JavaAppPackaging)
+
+mainClass in Compile := Some("com.izmeron.Application")
 
 val Origami = "1.0-20150902134048-8d00462"
 val localMvnRepo = "/Volumes/Data/dev_build_tools/apache-maven-3.1.1/repository"
@@ -58,7 +61,7 @@ libraryDependencies ++= Seq(
   "net.databinder"      %%  "unfiltered-netty-server" %   "0.8.4",
   "io.spray"            %%  "spray-json"              %   "1.3.2",
   "com.nrinaudo"        %%  "scalaz-stream-csv"       %   "0.1.3",
-
+  "org.scala-sbt"       %   "completion"              %   "0.13.9",
   "com.ambiata"         %%  "origami-core"            %   Origami,
   "com.ambiata"         %%  "origami-stream"          %   Origami  exclude("com.google.caliper","caliper") exclude("com.google.guava", "guava")
 )

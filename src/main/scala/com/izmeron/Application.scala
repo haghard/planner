@@ -14,8 +14,11 @@
 
 package com.izmeron
 
-import com.izmeron.http.PlannerServer
+import sbt.complete.Parser
+import sbt.complete.DefaultParsers._
 import com.typesafe.config.ConfigFactory
+
+import scala.annotation.tailrec
 
 object Application extends App {
 
@@ -26,12 +29,59 @@ object Application extends App {
   val path = cfg.getConfig("planner").getString("indexFile")
   val coefficient = cfg.getConfig("planner").getDouble("coefficient")
 
-  val server = new PlannerServer(path, httpPort,
+  /*val server = new com.izmeron.http.PlannerServer(path, httpPort,
     org.apache.log4j.Logger.getLogger("planner-server"),
     minLenght, lenghtThreshold, coefficient, Version(0, 1, 0)) with Planner
   server.start()
 
   Runtime.getRuntime.addShutdownHook(new Thread(new Runnable {
     def run() = server.shutdown()
-  }))
+  }))*/
+
+  parseLine(args.mkString(" "), cliParser).fold(runCli()) { _.start() }
+
+  private def readLine[U](parser: Parser[U], prompt: String = "> ", mask: Option[Char] = None): Option[U] = {
+    val reader = new sbt.FullReader(None, parser)
+    reader.readLine(prompt, mask) flatMap { line ⇒
+      parseLine(line, parser)
+    }
+  }
+
+  private def parseLine[U](line: String, parser: Parser[U]): Option[U] = {
+    val parsed = Parser.parse(line, parser)
+    parsed match {
+      case Right(value) ⇒ Some(value)
+      case Left(e)      ⇒ None
+    }
+  }
+
+  def runCli(): Unit = {
+    def readCommand(): Option[CliCommand] = readLine(cliParser)
+    @tailrec def loop(): Unit = {
+      val c = readCommand()
+      print(s"${Ansi.blueMessage("--RUN-- ")}")
+      c match {
+        case None ⇒
+          println(s"${Ansi.green("Unknown command: Please use [exit, check, plan]")}")
+          loop()
+        case Some(Exit) ⇒
+          println(s"${Ansi.green("exit")}")
+          System.exit(0)
+        case Some(cmd) ⇒ {
+          println(s"${Ansi.green(cmd.toString)}")
+          cmd.start()
+          loop()
+        }
+      }
+    }
+    loop()
+  }
+
+  def cliParser: Parser[CliCommand] = {
+    val restOfLineParser = any.* map (_.mkString(""))
+    val exit = token("exit" ^^^ Exit)
+    val check = (token("check" ~ Space) ~> restOfLineParser).map(args ⇒ new StaticCheck(args, minLenght, lenghtThreshold, coefficient))
+    val plan = (token("plan" ~ Space) ~> restOfLineParser).map(args ⇒ new Plan(args, minLenght, lenghtThreshold, coefficient))
+    exit | plan | check
+  }
 }

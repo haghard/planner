@@ -14,13 +14,15 @@
 
 package com
 
-import java.util.concurrent.Executors._
-import scala.annotation.tailrec
+import com.izmeron.http.AsyncContext
+
 import scala.util.Try
-import scalaz.\/
+import scalaz.concurrent.Task
+import scalaz.{ -\/, \/-, \/ }
+import scala.annotation.tailrec
+import java.util.concurrent.Executors._
 
 package object izmeron {
-
   import scala.collection.mutable
   import com.ambiata.origami.FoldM
   import com.ambiata.origami._, Origami._
@@ -40,7 +42,7 @@ package object izmeron {
   case class Order(kd: String, quantity: Int)
   case class Version(major: Int, minor: Int, bf: Int)
 
-  implicit val rowReader0 = RowReader(rec ⇒ Order(rec(0), rec(1).toInt))
+  implicit val rowReaderOrder = RowReader(rec ⇒ Order(rec(0), rec(13).toInt))
 
   case class RawCsvLine(kd: String, name: String, nameMat: String, marka: String,
                         diam: String, len: String, indiam: String, numOptim: String,
@@ -49,8 +51,7 @@ package object izmeron {
   implicit val rowReader = RowReader(rec ⇒ RawCsvLine(rec(0), rec(1), rec(2), rec(3), rec(4), rec(5), rec(6),
     rec(7), rec(8), rec(9), rec(10), rec(11), rec(12)))
 
-  case class Etalon(kd: String, name: String, nameMat: String, marka: String,
-                    diam: Int, len: Int, indiam: Int, qOptimal: Int, qMin: Int,
+  case class Etalon(kd: String, name: String, nameMat: String, marka: String, diam: Int, len: Int, indiam: Int, qOptimal: Int, qMin: Int,
                     lenMin: Int, numSect: Int, numPart: Int, tProfit: Int)
 
   object Result {
@@ -314,7 +315,7 @@ package object izmeron {
       } else result
     }
     //
-    val combinations = fetch(new CuttingStockProblem(sheetLength, blocks, quantities), Nil, false)
+    val combinations = fetch(new CuttingStockProblem(sheetLength, blocks, quantities), Nil, error = false)
     combinations.headOption.map { head ⇒
       combinations./:(head) { (acc, c) ⇒
         if (acc == c) c
@@ -368,9 +369,10 @@ package object izmeron {
       val completed = list.filter(_ != min).toBuffer
 
       while (threshold - completed(ind).cLength > minLenght && min.cQuantity > 0) {
-        val candidate = completed(cnt)
+        log.debug(threshold + " - " + min + " - " + completed + "-" + min.cQuantity + "- " + ind)
+        val candidate = completed(ind)
         val (credited, debited) = Result.redistribute(min, candidate)
-        completed(cnt) = debited
+        completed(ind) = debited
         min = credited
         cnt += 1
         ind = cnt % completed.size
@@ -393,4 +395,76 @@ package object izmeron {
           (q / item.multiplicity) + item.profit + ((item.minQuant / item.multiplicity) - 1) * 2 + 4)
       }
     }
+
+  sealed trait CliCommand {
+    def start(): Unit
+  }
+
+  object Exit extends CliCommand {
+    override def start() = System.exit(0)
+  }
+
+  final class StaticCheck(override val path: String, override val minLenght: Int,
+                          override val lenghtThreshold: Int, override val coefficient: Double) extends CliCommand with Planner {
+    override val log = org.apache.log4j.Logger.getLogger("static-check")
+
+    val ok = "Ok"
+    val separator = ";"
+    val rule0 = "0. Max lenght rule violation"
+    val rule1 = "1. Multiplicity violation"
+
+    override def start() = {
+      maxLengthCheck.attemptRun.fold({ th: Throwable ⇒ println(s"${Ansi.errorMessage(th.getMessage)}") }, {
+        case ((\/-(elem), None)) ⇒
+          elem.fold(println(s"${Ansi.errorMessage("Can't perform check")}")) { maxLenElem ⇒
+            if (lenghtThreshold < maxLenElem.len) println(s"${Ansi.blueMessage(rule0)}: ${Ansi.errorMessage(s"Config value $lenghtThreshold but $maxLenElem has been found")}")
+            else println(s"${Ansi.blueMessage(rule0)}: ${Ansi.blueMessage(ok)}")
+          }
+        case ((-\/(ex)), None) ⇒ println(s"${Ansi.blueMessage(rule0)}: ${Ansi.errorMessage(ex.getMessage)}")
+        case other             ⇒ println(s"${Ansi.blueMessage(rule0)}: ${Ansi.errorMessage(other.toString())}")
+      })
+
+      multiplicityCheck.attemptRun.fold({ th: Throwable ⇒ println(s"${Ansi.errorMessage(th.getMessage)}") }, {
+        case ((\/-(list), None)) ⇒
+          if (list.isEmpty)
+            println(s"${Ansi.blueMessage(rule1)}: ${Ansi.blueMessage(ok)}")
+          else
+            println(s"${Ansi.blueMessage(rule1)}: ${Ansi.green(list.size.toString)}: ${Ansi.errorMessage(list.mkString(separator))}")
+        case ((-\/(ex)), None) ⇒ println(s"${Ansi.blueMessage(rule1)}: ${Ansi.errorMessage(ex.getMessage)}")
+        case other             ⇒ println(s"${Ansi.blueMessage(rule1)}: ${Ansi.errorMessage(other.toString())}")
+      })
+    }
+  }
+
+  final class Plan(override val path: String, override val minLenght: Int,
+                   override val lenghtThreshold: Int, override val coefficient: Double) extends CliCommand
+      with Planner with ScalazProcessSupport with AsyncContext {
+    import scalaz.stream.merge
+
+    implicit val ex = PlannerEx
+    implicit val CpuIntensive = scalaz.concurrent.Strategy.Executor(PlannerEx)
+
+    override val log = org.apache.log4j.Logger.getLogger("planner")
+    private val queue = scalaz.stream.async.boundedQueue[List[Result]](parallelism * parallelism)
+
+    override def start(): Unit = {
+      createIndex.runAsync {
+        case \/-((\/-(index), None)) ⇒ {
+          println(Ansi.green("Index has been created"))
+          Task.fork {
+            (inputReader(orderReader.map(plan(_, index)), queue).drain merge merge.mergeN(parallelism)(cuttingWorkers(coefficient, queue)))
+              .foldMap(jsMapper(_))(JsValueM)
+              .runLast
+              .map(_.fold("Empty dataset")(_.prettyPrint))
+          }.runAsync {
+            case \/-(result) ⇒ println(Ansi.green(result))
+            case -\/(error)  ⇒ println(Ansi.red(s"${error.getClass.getName}: ${error.getStackTrace.mkString("\n")}: ${error.getMessage}"))
+          }
+        }
+        case -\/(ex)              ⇒ println(Ansi.red(s"${ex.getClass.getName}: ${ex.getStackTrace.mkString("\n")}: ${ex.getMessage}"))
+        case \/-((-\/(ex), None)) ⇒ println(Ansi.red(s"Error while building index: ${ex.getMessage}"))
+        case \/-((_, Some(ex)))   ⇒ println(Ansi.red(s"Finalizer error while building index: ${ex.getMessage}"))
+      }
+    }
+  }
 }

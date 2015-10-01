@@ -26,17 +26,19 @@ trait Planner {
   import scalaz.stream.Process
   import scalaz.std.AllInstances._
 
-  def log: org.apache.log4j.Logger
-
   def path: String
-
-  def lenghtThreshold: Int
 
   def minLenght: Int
 
   def coefficient: Double
 
-  def csvProcess: scalaz.stream.Process[Task, Etalon] =
+  def lenghtThreshold: Int
+
+  def log: org.apache.log4j.Logger
+
+  implicit val Codec: scala.io.Codec = scala.io.Codec.UTF8
+
+  def indexReader: scalaz.stream.Process[Task, Etalon] =
     scalaz.stream.csv.rowsR[RawCsvLine](path, ';').map { raw ⇒
       Etalon(raw.kd, raw.name, raw.nameMat, raw.marka,
         raw.diam.replaceAll(cvsSpace, empty).toInt,
@@ -48,11 +50,13 @@ trait Planner {
         raw.numSect.replaceAll(cvsSpace, empty).toInt,
         raw.numPart.replaceAll(cvsSpace, empty).toInt,
         raw.techComp.replaceAll(cvsSpace, empty).toInt)
-    }
+    }.onFailure { th ⇒ log.debug(s"IndexReader Failure: ${th.getMessage}"); Process.halt }
+
+  def orderReader: scalaz.stream.Process[Task, Order] =
+    scalaz.stream.csv.rowsR[Order](path, ';')
+      .onFailure { th ⇒ log.debug(s"OrderReader Failure: ${th.getMessage}"); Process.halt }
 
   def start(): Unit
-
-  def shutdown(): Unit
 
   private[izmeron] def maxLen: FoldM[SafeTTask, Etalon, Option[Etalon]] =
     maximumBy[Etalon, Int] { e: Etalon ⇒ e.len }.into[SafeTTask]
@@ -92,15 +96,22 @@ trait Planner {
       acc
     }.into[SafeTTask]
 
-  def createIndex: Task[(Throwable \/ mutable.Map[String, RawResult], Option[FinalizersException])] =
-    Task.fork((buildIndex run csvProcess).attemptRun)(PlannerEx)
+  private[izmeron] def multiplicity: FoldM[SafeTTask, Etalon, List[String]] =
+    fromFoldLeft[Etalon, List[String]](List[String]()) { (acc, c) ⇒
+      val counted = c.lenMin * c.numPart
+      if (c.len != counted) s"[${c.kd}: Expected:$counted - Actual:${c.len}]" :: acc
+      else acc
+    }.into[SafeTTask]
 
-  /**
-   *
-   * @param ord
-   * @param index
-   * @return
-   */
+  def maxLengthCheck: Task[(Throwable \/ Option[Etalon], Option[FinalizersException])] =
+    Task.fork((maxLen run indexReader).attemptRun)(PlannerEx)
+
+  def multiplicityCheck: Task[(Throwable \/ List[String], Option[FinalizersException])] =
+    Task.fork((multiplicity run indexReader).attemptRun)(PlannerEx)
+
+  def createIndex: Task[(Throwable \/ mutable.Map[String, RawResult], Option[FinalizersException])] =
+    Task.fork((buildIndex run indexReader).attemptRun)(PlannerEx)
+
   def plan(ord: com.izmeron.Order, index: mutable.Map[String, RawResult]): scalaz.stream.Process[Task, List[Result]] =
     Process.await(Task.delay(index.get(ord.kd))) { values: Option[RawResult] ⇒
       values.fold(Process.emit(-\/(ord.kd): Or)) { result: RawResult ⇒ Process.emit(\/-(result): Or) }

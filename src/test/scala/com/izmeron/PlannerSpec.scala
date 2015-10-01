@@ -17,7 +17,7 @@ package com.izmeron
 import org.specs2.mutable.Specification
 
 class PlannerSpec extends Specification {
-  val lenghtThreshold = 1200
+  var lenghtThreshold = 1400
   val minLenght = 400
   val c = 1.2
   val logger = org.apache.log4j.Logger.getLogger("test-planner")
@@ -34,7 +34,7 @@ class PlannerSpec extends Specification {
         override val log = logger
         override val minLenght = 400
         override val lenghtThreshold = 1200
-        override val path = "./cvs/metal2pipes2.csv"
+        override val path = "./cvs/metal2pipes2_.csv"
 
         override def start(): Unit = {
           //val (l,r) = (highs run csvProcess).run.run
@@ -78,8 +78,6 @@ class PlannerSpec extends Specification {
 */
 
   "cuttingStockProblem" should {
-    var threshold = 1400
-    val minLenght = 400
 
     "scenario0" in {
       val rs =
@@ -89,17 +87,17 @@ class PlannerSpec extends Specification {
           Result("86401.905", "Сталь 20Х/120/56", 564, 1128, 2, 2, 1, 1, 0) ::
           Result("86602.038", "Сталь 20Х/120/56", 270, 1080, 4, 4, 1, 1, 0) :: Nil
 
-      val combinations = cuttingStockProblem(rs, threshold, minLenght, c, logger)
+      val combinations = cuttingStockProblem(rs, lenghtThreshold, minLenght, c, logger)
 
       val sumLen = combinations.map(_.sheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).sum
-      val actual = combinations.find(e ⇒ threshold - e.rest < minLenght)
+      val actual = combinations.find(e ⇒ lenghtThreshold - e.rest < minLenght)
       val balance = combinations.map(_.rest).sum
 
       logger.debug(s"Sum-Lenght $sumLen")
       logger.debug(s"Combinations $combinations")
 
       actual.isDefined === false
-      (sumLen + balance) === combinations.size * threshold
+      (sumLen + balance) === combinations.size * lenghtThreshold
     }
 
     "scenario1" in {
@@ -109,17 +107,17 @@ class PlannerSpec extends Specification {
           Result("93901.00.05.201", "Сталь 20Х2Н4А/115/45", 514, 1028, 2, 2, 1, 1, 0) ::
           Result("93901.00.05.301", "Сталь 20Х2Н4А/115/45", 514, 1028, 2, 2, 1, 1, 0) :: Nil
 
-      val combinations = cuttingStockProblem(rs, threshold, minLenght, c, logger)
+      val combinations = cuttingStockProblem(rs, lenghtThreshold, minLenght, c, logger)
 
       val sumLen = combinations.map(_.sheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).sum
-      val actual = combinations.find(e ⇒ threshold - e.rest < minLenght)
+      val actual = combinations.find(e ⇒ lenghtThreshold - e.rest < minLenght)
       val balance = combinations.map(_.rest).sum
 
       logger.debug(s"Sum-Lenght $sumLen")
       logger.debug(s"Combinations $combinations")
 
       actual.isDefined === false
-      (sumLen + balance) === combinations.size * threshold
+      (sumLen + balance) === combinations.size * lenghtThreshold
     }
 
     "scenario2" in {
@@ -130,33 +128,33 @@ class PlannerSpec extends Specification {
           Result("94100.001.007.072", "Сталь 38ХГМ/100/45", 170, 684, 4, 3, 1, 1, 0),
           Result("94100.001.007.072", "Сталь 38ХГМ/100/45", 170, 684, 4, 3, 1, 1, 0))
 
-      val combinations = cuttingStockProblem(rs, threshold, minLenght, c, logger)
+      val combinations = cuttingStockProblem(rs, lenghtThreshold, minLenght, c, logger)
 
       val sumLen = combinations.map(_.sheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).sum
-      val actual = combinations.find(e ⇒ threshold - e.rest < minLenght)
+      val actual = combinations.find(e ⇒ lenghtThreshold - e.rest < minLenght)
       val balance = combinations.map(_.rest).sum
 
       logger.debug(s"Sum-Lenght $sumLen")
       logger.debug(s"Combinations $combinations")
 
       actual.isDefined === false
-      (sumLen + balance) === combinations.size * threshold
+      (sumLen + balance) === combinations.size * lenghtThreshold
     }
 
     "scenario3" in {
       val rs = Result("94900.04.701", "Сталь 38ХГМ/260/78", 437, 874, 2, 2, 1, 1, 0) ::
         Result("94900.04.751", "Сталь 38ХГМ/260/78", 437, 874, 2, 2, 1, 1, 0) :: Nil
-      val combinations = cuttingStockProblem(rs, threshold, minLenght, c, logger)
+      val combinations = cuttingStockProblem(rs, lenghtThreshold, minLenght, c, logger)
 
       val sumLen = combinations.map(_.sheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).sum
-      val actual = combinations.find(e ⇒ threshold - e.rest < minLenght)
+      val actual = combinations.find(e ⇒ lenghtThreshold - e.rest < minLenght)
       val balance = combinations.map(_.rest).sum
 
       logger.debug(s"Sum-Lenght $sumLen")
       logger.debug(s"Combinations $combinations")
 
       actual.isDefined === false
-      (sumLen + balance) === combinations.size * threshold
+      (sumLen + balance) === combinations.size * lenghtThreshold
     }
 
     "scenario4" in {
@@ -165,16 +163,16 @@ class PlannerSpec extends Specification {
           Result("94900.04.751", "Сталь 38ХГМ/260/78", 437, 874, 2, 2, 1, 1, 0),
           Result("94900.04.751", "Сталь 38ХГМ/260/78", 437, 874, 2, 2, 1, 1, 0))
 
-      val combinations = cuttingStockProblem(rs, threshold, minLenght, c, logger)
+      val combinations = cuttingStockProblem(rs, lenghtThreshold, minLenght, c, logger)
       val sumLen = combinations.map(_.sheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).sum
-      val actual = combinations.find(e ⇒ threshold - e.rest < minLenght)
+      val actual = combinations.find(e ⇒ lenghtThreshold - e.rest < minLenght)
       val balance = combinations.map(_.rest).sum
 
       logger.debug(s"Sum-Lenght $sumLen")
       logger.debug(s"Combinations $combinations")
 
       actual.isDefined === false
-      (sumLen + balance) === combinations.size * threshold
+      (sumLen + balance) === combinations.size * lenghtThreshold
     }
 
     "scenario5" in {
@@ -183,16 +181,16 @@ class PlannerSpec extends Specification {
           Result("94900.04.751", "Сталь 38ХГМ/260/78", 437, 874, 2, 2, 1, 1, 0),
           Result("94900.04.881", "Сталь 38ХГМ/260/78", 502, 1004, 2, 2, 1, 1, 0))
 
-      val combinations = cuttingStockProblem(rs, threshold, minLenght, c, logger)
+      val combinations = cuttingStockProblem(rs, lenghtThreshold, minLenght, c, logger)
       val sumLen = combinations.map(_.sheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).sum
-      val actual = combinations.find(e ⇒ threshold - e.rest < minLenght)
+      val actual = combinations.find(e ⇒ lenghtThreshold - e.rest < minLenght)
       val balance = combinations.map(_.rest).sum
 
       logger.debug(s"Sum-Lenght $sumLen")
       logger.debug(s"Combinations $combinations")
 
       actual.isDefined === false
-      (sumLen + balance) === combinations.size * threshold
+      (sumLen + balance) === combinations.size * lenghtThreshold
     }
 
     "scenario6" in {
@@ -211,21 +209,21 @@ class PlannerSpec extends Specification {
           Result("93900.00.06.026", "Сталь 38ХГМ/120/32", 390, 780, 2, 2, 1, 1, 0), Result("93900.00.04.015", "Сталь 38ХГМ/120/32", 403, 806, 2, 2, 1, 1, 0),
           Result("93930.03.015", "Сталь 38ХГМ/120/32", 403, 806, 2, 2, 1, 1, 0), Result("93900.00.06.005", "Сталь 38ХГМ/120/32", 403, 806, 2, 2, 1, 1, 0),
           Result("93930.04.016", "Сталь 38ХГМ/120/32", 403, 806, 2, 2, 1, 1, 0))
-      val combinations = cuttingStockProblem(rs, threshold, minLenght, c, logger)
+      val combinations = cuttingStockProblem(rs, lenghtThreshold, minLenght, c, logger)
 
       val sumLen = combinations.map(_.sheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).sum
-      val actual = combinations.find(e ⇒ threshold - e.rest < minLenght)
+      val actual = combinations.find(e ⇒ lenghtThreshold - e.rest < minLenght)
       val balance = combinations.map(_.rest).sum
 
       logger.debug(s"Sum-Lenght $sumLen")
       logger.debug(s"Combinations $combinations")
 
       actual.isDefined === false
-      (sumLen + balance) === combinations.size * threshold
+      (sumLen + balance) === combinations.size * lenghtThreshold
     }
 
     "scenario7" in {
-      threshold = 450 * 4
+      lenghtThreshold = 450 * 4
 
       val rs =
         List(Result("XY", "Сталь 38ХГМ-260-78", 382, 382, 1, 1, 1, 1, 0),
@@ -233,81 +231,81 @@ class PlannerSpec extends Specification {
           Result("EF", "Сталь 38ХГМ-260-78", 432, 1728, 4, 4, 1, 1, 0), Result("RD", "Сталь 38ХГМ-260-78", 368, 1104, 3, 3, 1, 1, 0),
           Result("DV", "Сталь 38ХГМ-260-78", 399, 1596, 4, 4, 1, 1, 0), Result("TU", "Сталь 38ХГМ-260-78", 404, 404, 1, 1, 1, 1, 0))
 
-      val combinations = cuttingStockProblem(rs, threshold, 400, c, logger)
+      val combinations = cuttingStockProblem(rs, lenghtThreshold, 400, c, logger)
 
       val sumLen = combinations.map(_.sheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).sum
-      val actual = combinations.find(e ⇒ threshold - e.rest < minLenght)
+      val actual = combinations.find(e ⇒ lenghtThreshold - e.rest < minLenght)
       val balance = combinations.map(_.rest).sum
 
       logger.debug(s"Sum-Lenght $sumLen")
       logger.debug(s"Combinations $combinations")
 
       actual.isDefined === false
-      (sumLen + balance) === combinations.size * threshold
+      (sumLen + balance) === combinations.size * lenghtThreshold
     }
 
     "scenario8" in {
-      threshold = 450 * 4
+      lenghtThreshold = 450 * 4
 
       val in = List(Result("FG", "Сталь 38ХГМ-260-78,394", 394, 1, 1, 1, 1, 0), Result("FU", "Сталь 38ХГМ-260-78", 448, 1792, 4, 4, 1, 1, 0),
         Result("SJ", "Сталь 38ХГМ-260-78", 393, 1179, 3, 3, 1, 1, 0), Result("WY", "Сталь 38ХГМ-260-78", 388, 776, 2, 2, 1, 1, 0),
         Result("YS", "Сталь 38ХГМ-260-78", 357, 1428, 4, 4, 1, 1, 0), Result("RO", "Сталь 38ХГМ-260-78", 446, 892, 2, 2, 1, 1, 0),
         Result("RT", "Сталь 38ХГМ-260-78", 401, 401, 1, 1, 1, 1, 0))
 
-      val combinations = cuttingStockProblem(in, threshold, 400, c, logger)
+      val combinations = cuttingStockProblem(in, lenghtThreshold, 400, c, logger)
       val sumLen = combinations.map(_.sheets.foldLeft(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).sum
-      val actual = combinations.find(e ⇒ threshold - e.rest < minLenght)
+      val actual = combinations.find(e ⇒ lenghtThreshold - e.rest < minLenght)
       val balance = combinations.map(_.rest).sum
 
       logger.debug(s"Sum-Lenght $sumLen")
       logger.debug(s"Combinations $combinations")
 
       actual.isDefined === false
-      (sumLen + balance) === combinations.size * threshold
+      (sumLen + balance) === combinations.size * lenghtThreshold
     }
 
     "scenario9" in {
-      threshold = 450 * 4
+      lenghtThreshold = 450 * 4
 
       val in = List(Result("OV", "Сталь 38ХГМ-260-78", 389, 1556, 4, 4, 1, 1, 0), Result("RJ", "Сталь 38ХГМ-260-78", 358, 358, 1, 1, 1, 1, 0),
         Result("IR", "Сталь 38ХГМ-260-78", 400, 800, 2, 2, 1, 1, 0), Result("EH", "Сталь 38ХГМ-260-78", 353, 1059, 3, 3, 1, 1, 0),
         Result("BA", "Сталь 38ХГМ-260-78", 423, 846, 2, 2, 1, 1, 0), Result("UU", "Сталь 38ХГМ-260-78", 403, 1209, 3, 3, 1, 1, 0),
         Result("IA", "Сталь 38ХГМ-260-78", 418, 418, 1, 1, 1, 1, 0))
 
-      val combinations = cuttingStockProblem(in, threshold, 400, c, logger)
+      val combinations = cuttingStockProblem(in, lenghtThreshold, 400, c, logger)
       val sumLen = combinations.map(_.sheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).sum
-      val actual = combinations.find(e ⇒ threshold - e.rest < minLenght)
+      val actual = combinations.find(e ⇒ lenghtThreshold - e.rest < minLenght)
       val balance = combinations.map(_.rest).sum
 
       logger.debug(s"Sum-Lenght $sumLen")
       logger.debug(s"Combinations $combinations")
 
       actual.isDefined === false
-      (sumLen + balance) === combinations.size * threshold
+      (sumLen + balance) === combinations.size * lenghtThreshold
     }
 
     "scenario10" in {
-      threshold = 450 * 4
+      lenghtThreshold = 450 * 4
 
       val in = List(Result("WD", "Сталь 38ХГМ-260-78", 373, 373, 1, 1, 1, 1, 0), Result("TW", "Сталь 38ХГМ-260-78", 417, 834, 2, 2, 1, 1, 0),
         Result("EC", "Сталь 38ХГМ-260-78", 391, 391, 1, 1, 1, 1, 0), Result("VP", "Сталь 38ХГМ-260-78", 436, 1744, 4, 4, 1, 1, 0),
         Result("OU", "Сталь 38ХГМ-260-78", 394, 1576, 4, 4, 1, 1, 0), Result("YD", "Сталь 38ХГМ-260-78", 394, 1182, 3, 3, 1, 1, 0),
         Result("YO", "Сталь 38ХГМ-260-78", 393, 1572, 4, 4, 1, 1, 0))
 
-      val combinations = cuttingStockProblem(in, threshold, 400, c, logger)
+      val combinations = cuttingStockProblem(in, lenghtThreshold, 400, c, logger)
       val sumLen = combinations.map(_.sheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).sum
-      val actual = combinations.find(e ⇒ threshold - e.rest < minLenght)
+      val actual = combinations.find(e ⇒ lenghtThreshold - e.rest < minLenght)
       val balance = combinations.map(_.rest).sum
 
       logger.debug(s"Sum-Lenght $sumLen")
       logger.debug(s"Combinations $combinations")
 
       actual.isDefined === false
-      (sumLen + balance) === combinations.size * threshold
+      (sumLen + balance) === combinations.size * lenghtThreshold
     }
 
     "scenario-11-long-playing" in {
-      threshold = 450 * 4
+      lenghtThreshold = 450 * 4
 
       val in = List(Result("NO", "Сталь 38ХГМ-260-78", 449, 1347, 3, 3, 1, 1, 0),
         Result("RT", "Сталь 38ХГМ-260-78", 385, 1540, 4, 4, 1, 1, 0), Result("KL", "Сталь 38ХГМ-260-78", 445, 445, 1, 1, 1, 1, 0),
@@ -321,16 +319,16 @@ class PlannerSpec extends Specification {
         Result("WV", "Сталь 38ХГМ-260-78", 421, 1684, 4, 4, 1, 1, 0), Result("BF", "Сталь 38ХГМ-260-78", 375, 1500, 4, 4, 1, 1, 0),
         Result("HN", "Сталь 38ХГМ-260-78", 431, 431, 1, 1, 1, 1, 0))
 
-      val combinations = cuttingStockProblem(in, threshold, 400, c, logger)
+      val combinations = cuttingStockProblem(in, lenghtThreshold, 400, c, logger)
       val sumLen = combinations.map(_.sheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).sum
-      val actual = combinations.find(e ⇒ threshold - e.rest < minLenght)
+      val actual = combinations.find(e ⇒ lenghtThreshold - e.rest < minLenght)
       val balance = combinations.map(_.rest).sum
 
       logger.debug(s"Sum-Lenght $sumLen")
       logger.debug(s"Combinations $combinations")
 
       actual.isDefined === false
-      (sumLen + balance) === combinations.size * threshold
+      (sumLen + balance) === combinations.size * lenghtThreshold
     }
   }
 }

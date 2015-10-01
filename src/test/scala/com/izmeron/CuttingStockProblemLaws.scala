@@ -17,7 +17,7 @@ package com.izmeron
 import org.scalacheck._
 import Prop._
 
-object CuttingStockProblemSpec extends Properties("CuttingStockProblemSpec") {
+object CuttingStockProblemLaws extends Properties("CuttingStockProblemSpec") {
   var count = 0
   val Size = 13
   val maxSize = 450
@@ -36,8 +36,7 @@ object CuttingStockProblemSpec extends Properties("CuttingStockProblemSpec") {
         size ← Gen.choose(1, maxNum)
         detail ← Gen.choose(350, maxSize)
       } yield Result(new String(Array(k, d)), groupKey, detail, detail * size, size, size, 1, 1, 0)
-    )
-  ) { list: List[Result] ⇒
+    )) { list: List[Result] ⇒
 
       if (list.size == Size && !list.exists(_.kd == "")) {
         logger.debug(s"in $count $list")
