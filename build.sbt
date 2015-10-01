@@ -62,6 +62,7 @@ libraryDependencies ++= Seq(
   "io.spray"            %%  "spray-json"              %   "1.3.2",
   "com.nrinaudo"        %%  "scalaz-stream-csv"       %   "0.1.3",
   "org.scala-sbt"       %   "completion"              %   "0.13.9",
+  "info.folone"         %%  "poi-scala"               %   "0.15",
   "com.ambiata"         %%  "origami-core"            %   Origami,
   "com.ambiata"         %%  "origami-stream"          %   Origami  exclude("com.google.caliper","caliper") exclude("com.google.guava", "guava")
 )

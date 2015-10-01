@@ -123,6 +123,9 @@ object http {
     import scalaz.stream.async
     import scalaz.stream.csv._
     import scalaz.stream.merge
+    import OutputWriter._
+
+    val output = OutputWriter[spray.json.JsObject]
 
     override def intent: Intent = {
       case req ⇒
@@ -140,9 +143,9 @@ object http {
             forkTask {
               val queue = async.boundedQueue[List[Result]](parallelism * parallelism)
               (inputReader(rowsR[Order](req.inputStream, ';').map(server.plan(_, index)), queue).drain merge merge.mergeN(parallelism)(cuttingWorkers(coefficient, queue)))
-                .foldMap(jsMapper(_))(JsValueM)
+                .foldMap(output.mapper(lenghtThreshold, _))(output.monoid)
                 .runLast
-                .map { _.fold(errorResponse("empty response"))(json ⇒ jsonResponse(json.prettyPrint)) }
+                .map { _.fold(errorResponse(output.empty[String]))(json ⇒ jsonResponse(output.convert[String](json))) }
             }
 
           case invalid ⇒

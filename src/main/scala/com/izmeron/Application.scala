@@ -28,6 +28,11 @@ object Application extends App {
   val httpPort = cfg.getConfig("planner").getInt("httpPort")
   val path = cfg.getConfig("planner").getString("indexFile")
   val coefficient = cfg.getConfig("planner").getDouble("coefficient")
+  val outputDir = cfg.getConfig("planner").getString("outputDir")
+
+  val outFormatJ = "json"
+  val outFormatE = "excel"
+
   /*
   val server = new com.izmeron.http.PlannerServer(path, httpPort,
     org.apache.log4j.Logger.getLogger("planner-server"),
@@ -69,7 +74,7 @@ object Application extends App {
           println(s"${Ansi.green("exit")}")
           System.exit(0)
         case Some(cmd) ⇒ {
-          println(s"${Ansi.green(cmd.toString)}")
+          println(s"${Ansi.green(cmd.getClass.getName)}")
           cmd.start()
           loop()
         }
@@ -79,10 +84,17 @@ object Application extends App {
   }
 
   def cliParser: Parser[CliCommand] = {
-    val restOfLineParser = any.* map (_.mkString(""))
+    import OutputWriter._
+    val pathLineParser = any.* map (_.mkString(""))
     val exit = token("exit" ^^^ Exit)
-    val check = (token("check" ~ Space) ~> restOfLineParser).map(args ⇒ new StaticCheck(args, minLenght, lenghtThreshold, coefficient))
-    val plan = (token("plan" ~ Space) ~> restOfLineParser).map(args ⇒ new Plan(args, minLenght, lenghtThreshold, coefficient))
+    val check = (token("check" ~ Space) ~> pathLineParser).map(args ⇒ StaticCheck(args, minLenght, lenghtThreshold, coefficient))
+    val plan = (token("plan" ~ Space) ~> pathLineParser ~ (token("--out" ~ Space) ~> (outFormatJ | outFormatE))).map { args ⇒
+      val path = args._1.trim
+      val format = args._2.trim
+      if (format == outFormatJ) Plan[spray.json.JsObject](path, outputDir, format, minLenght, lenghtThreshold, coefficient)
+      else Plan[Set[info.folone.scala.poi.Row]](path, outputDir, format, minLenght, lenghtThreshold, coefficient)
+    }
+
     exit | plan | check
   }
 }

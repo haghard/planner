@@ -32,36 +32,6 @@ trait ScalazFlowSupport {
 
   val loggerSink = scalaz.stream.sink.lift[Task, Iterable[Result]](list ⇒ Task.delay(log.debug(s"order-line: $list")))
 
-  val jsMapper = { cs: List[Combination] ⇒
-    val init = JsObject("group" -> JsString(cs.head.groupKey), "body" -> JsArray())
-    val writerSheet = new spray.json.JsonWriter[Sheet] {
-      override def write(s: Sheet): JsValue =
-        JsObject("kd" -> JsString(s.kd), "lenght" -> JsNumber(s.lenght), "quantity" -> JsNumber(s.quantity))
-    }
-    cs./:(init) { (acc, c) ⇒
-      val cur = JsObject(
-        "sheet" -> JsArray(c.sheets.toVector.map(writerSheet.write)),
-        "balance" -> JsNumber(c.rest),
-        "lenght" -> JsNumber(lenghtThreshold - c.rest)
-      )
-      JsObject(
-        "group" -> acc.fields("group"),
-        "body" -> JsArray(acc.fields("body").asInstanceOf[JsArray].elements.:+(cur))
-      )
-    }
-  }
-
-  implicit val JsValueM = new scalaz.Monoid[JsObject] {
-    override def zero = JsObject("uri" -> JsString("/orders"), "body" -> JsArray())
-    override def append(f1: JsObject, f2: ⇒ JsObject): JsObject = {
-      (f1, f2) match {
-        case (f1: JsObject, f2: JsValue) ⇒
-          JsObject("uri" -> f1.fields("uri").asInstanceOf[JsString],
-            "body" -> JsArray(f1.fields("body").asInstanceOf[JsArray].elements.:+(f2)))
-      }
-    }
-  }
-
   def queuePublisher(it: Iterator[List[Result]]): Process[Task, List[Result]] = {
     def go(iter: Iterator[List[Result]]): Process[Task, List[Result]] =
       Process.await(Task.delay(iter))(iter ⇒ if (iter.hasNext) Process.emit(iter.next) ++ go(iter) else Process.halt)

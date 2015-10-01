@@ -403,8 +403,17 @@ package object izmeron {
     override def start() = System.exit(0)
   }
 
-  final class StaticCheck(override val path: String, override val minLenght: Int,
-                          override val lenghtThreshold: Int, override val coefficient: Double) extends CliCommand with Planner {
+  object Empty extends CliCommand {
+    override def start() = ()
+  }
+
+  object StaticCheck {
+    def apply(path: String, minLenght: Int, lenghtThreshold: Int, coefficient: Double): StaticCheck =
+      new StaticCheck(path, minLenght, lenghtThreshold, coefficient)
+  }
+
+  class StaticCheck(override val path: String, override val minLenght: Int,
+                    override val lenghtThreshold: Int, override val coefficient: Double) extends CliCommand with Planner {
     override val log = org.apache.log4j.Logger.getLogger("static-check")
 
     val ok = "Ok"
@@ -433,9 +442,14 @@ package object izmeron {
     }
   }
 
-  final class Plan(override val path: String, override val minLenght: Int,
-                   override val lenghtThreshold: Int, override val coefficient: Double) extends CliCommand
-      with Planner with ScalazFlowSupport with AsyncContext {
+  object Plan {
+    def apply[T](path: String, outputDir: String, outFormat: String, minLenght: Int, lenghtThreshold: Int, coefficient: Double)(implicit writer: OutputWriter[T]): Plan[T] =
+      new Plan[T](path, outputDir, outFormat, minLenght, lenghtThreshold, coefficient, writer)
+  }
+
+  class Plan[T](override val path: String, outputDir: String, outFormat: String, override val minLenght: Int,
+                override val lenghtThreshold: Int, override val coefficient: Double,
+                writer: OutputWriter[T]) extends CliCommand with Planner with ScalazFlowSupport with AsyncContext {
     import scalaz.stream.merge
     import scalaz.stream.async
 
@@ -452,11 +466,13 @@ package object izmeron {
           log.debug("Index has been created")
           Task.fork {
             (inputReader(orderReader.map(plan(_, index)), queue).drain merge merge.mergeN(parallelism)(cuttingWorkers(coefficient, queue)))
-              .foldMap(jsMapper(_))(JsValueM)
+              .foldMap(writer.mapper(lenghtThreshold, _))(writer.monoid)
               .runLast
-              .map(_.fold("Empty dataset")(_.prettyPrint))
+              .map(_.fold(writer.empty)(writer.convert[T]))
           }.runAsync {
-            case \/-(result) ⇒ println(Ansi.green(result))
+            case \/-(result) ⇒
+              writer.write(result, outputDir).unsafePerformIO()
+              println(Ansi.green(s"$result"))
             case -\/(error) ⇒
               println(Ansi.red(s"${error.getClass.getName}: ${error.getStackTrace.mkString("\n")}: ${error.getMessage}"))
               log.debug(s"${error.getClass.getName}: ${error.getStackTrace.mkString("\n")}: ${error.getMessage}")

@@ -14,7 +14,11 @@
 
 package com.izmeron
 
+import com.izmeron.Sheet
+import info.folone.scala.poi.{Sheet, Workbook}
 import org.specs2.mutable.Specification
+
+import scalaz.Semigroup
 
 class PlannerSpec extends Specification {
   var lenghtThreshold = 1400
@@ -75,17 +79,16 @@ class PlannerSpec extends Specification {
       1 === 1
     }
   }
-*/
+  */
 
   "cuttingStockProblem" should {
-
     "scenario0" in {
       val rs =
         Result("86401.095", "Сталь 20Х/120/56", 614, 1228, 2, 2, 1, 1, 0) ::
           Result("86602.056", "Сталь 20Х/120/56", 275, 825, 3, 3, 1, 1, 0) ::
           Result("86602.006", "Сталь 20Х/120/56", 276, 1380, 5, 5, 1, 1, 0) ::
           Result("86401.905", "Сталь 20Х/120/56", 564, 1128, 2, 2, 1, 1, 0) ::
-          Result("86602.038", "Сталь 20Х/120/56", 270, 1080, 4, 4, 1, 1, 0) :: Nil
+          Result("86602.038", "Сталь 20Х/120/56", 270, 1080, 4, 4, 1, 1, 0) :: Empty
 
       val combinations = cuttingStockProblem(rs, lenghtThreshold, minLenght, c, logger)
 
@@ -105,7 +108,7 @@ class PlannerSpec extends Specification {
         Result("93901.00.05.101", "Сталь 20Х2Н4А/115/45", 514, 1028, 2, 2, 1, 1, 0) ::
           Result("93901.05.003", "Сталь 20Х2Н4А/115/45", 503, 1006, 2, 2, 1, 1, 0) ::
           Result("93901.00.05.201", "Сталь 20Х2Н4А/115/45", 514, 1028, 2, 2, 1, 1, 0) ::
-          Result("93901.00.05.301", "Сталь 20Х2Н4А/115/45", 514, 1028, 2, 2, 1, 1, 0) :: Nil
+          Result("93901.00.05.301", "Сталь 20Х2Н4А/115/45", 514, 1028, 2, 2, 1, 1, 0) :: Empty
 
       val combinations = cuttingStockProblem(rs, lenghtThreshold, minLenght, c, logger)
 
@@ -143,7 +146,7 @@ class PlannerSpec extends Specification {
 
     "scenario3" in {
       val rs = Result("94900.04.701", "Сталь 38ХГМ/260/78", 437, 874, 2, 2, 1, 1, 0) ::
-        Result("94900.04.751", "Сталь 38ХГМ/260/78", 437, 874, 2, 2, 1, 1, 0) :: Nil
+        Result("94900.04.751", "Сталь 38ХГМ/260/78", 437, 874, 2, 2, 1, 1, 0) :: Empty
       val combinations = cuttingStockProblem(rs, lenghtThreshold, minLenght, c, logger)
 
       val sumLen = combinations.map(_.sheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).sum
