@@ -369,7 +369,6 @@ package object izmeron {
       val completed = list.filter(_ != min).toBuffer
 
       while (threshold - completed(ind).cLength > minLenght && min.cQuantity > 0) {
-        log.debug(threshold + " - " + min + " - " + completed + "-" + min.cQuantity + "- " + ind)
         val candidate = completed(ind)
         val (credited, debited) = Result.redistribute(min, candidate)
         completed(ind) = debited
@@ -426,10 +425,8 @@ package object izmeron {
 
       multiplicityCheck.attemptRun.fold({ th: Throwable ⇒ println(s"${Ansi.errorMessage(th.getMessage)}") }, {
         case ((\/-(list), None)) ⇒
-          if (list.isEmpty)
-            println(s"${Ansi.blueMessage(rule1)}: ${Ansi.blueMessage(ok)}")
-          else
-            println(s"${Ansi.blueMessage(rule1)}: ${Ansi.green(list.size.toString)}: ${Ansi.errorMessage(list.mkString(separator))}")
+          if (list.isEmpty) println(s"${Ansi.blueMessage(rule1)}: ${Ansi.blueMessage(ok)}")
+          else println(s"${Ansi.blueMessage(rule1)}: ${Ansi.green(list.size.toString)}: ${Ansi.errorMessage(list.mkString(separator))}")
         case ((-\/(ex)), None) ⇒ println(s"${Ansi.blueMessage(rule1)}: ${Ansi.errorMessage(ex.getMessage)}")
         case other             ⇒ println(s"${Ansi.blueMessage(rule1)}: ${Ansi.errorMessage(other.toString())}")
       })
@@ -438,19 +435,21 @@ package object izmeron {
 
   final class Plan(override val path: String, override val minLenght: Int,
                    override val lenghtThreshold: Int, override val coefficient: Double) extends CliCommand
-      with Planner with ScalazProcessSupport with AsyncContext {
+      with Planner with ScalazFlowSupport with AsyncContext {
     import scalaz.stream.merge
+    import scalaz.stream.async
 
     implicit val ex = PlannerEx
     implicit val CpuIntensive = scalaz.concurrent.Strategy.Executor(PlannerEx)
 
     override val log = org.apache.log4j.Logger.getLogger("planner")
-    private val queue = scalaz.stream.async.boundedQueue[List[Result]](parallelism * parallelism)
+    private val queue = async.boundedQueue[List[Result]](parallelism * parallelism)
 
     override def start(): Unit = {
       createIndex.runAsync {
         case \/-((\/-(index), None)) ⇒ {
           println(Ansi.green("Index has been created"))
+          log.debug("Index has been created")
           Task.fork {
             (inputReader(orderReader.map(plan(_, index)), queue).drain merge merge.mergeN(parallelism)(cuttingWorkers(coefficient, queue)))
               .foldMap(jsMapper(_))(JsValueM)
@@ -458,12 +457,20 @@ package object izmeron {
               .map(_.fold("Empty dataset")(_.prettyPrint))
           }.runAsync {
             case \/-(result) ⇒ println(Ansi.green(result))
-            case -\/(error)  ⇒ println(Ansi.red(s"${error.getClass.getName}: ${error.getStackTrace.mkString("\n")}: ${error.getMessage}"))
+            case -\/(error) ⇒
+              println(Ansi.red(s"${error.getClass.getName}: ${error.getStackTrace.mkString("\n")}: ${error.getMessage}"))
+              log.debug(s"${error.getClass.getName}: ${error.getStackTrace.mkString("\n")}: ${error.getMessage}")
           }
         }
-        case -\/(ex)              ⇒ println(Ansi.red(s"${ex.getClass.getName}: ${ex.getStackTrace.mkString("\n")}: ${ex.getMessage}"))
-        case \/-((-\/(ex), None)) ⇒ println(Ansi.red(s"Error while building index: ${ex.getMessage}"))
-        case \/-((_, Some(ex)))   ⇒ println(Ansi.red(s"Finalizer error while building index: ${ex.getMessage}"))
+        case -\/(ex) ⇒
+          println(Ansi.red(s"${ex.getClass.getName}: ${ex.getStackTrace.mkString("\n")}: ${ex.getMessage}"))
+          log.debug(s"${ex.getClass.getName}: ${ex.getStackTrace.mkString("\n")}: ${ex.getMessage}")
+        case \/-((-\/(ex), None)) ⇒
+          println(Ansi.red(s"Error while building index: ${ex.getMessage}"))
+          log.debug(s"Error while building index: ${ex.getMessage}")
+        case \/-((_, Some(ex))) ⇒
+          println(Ansi.red(s"Finalizer error while building index: ${ex.getMessage}"))
+          log.debug(s"Finalizer error while building index: ${ex.getMessage}")
       }
     }
   }

@@ -16,7 +16,7 @@ package com.izmeron
 
 import scalaz.concurrent.Task
 
-trait ScalazProcessSupport {
+trait ScalazFlowSupport {
   import spray.json._
   import scala.collection._
   import scalaz.stream.merge
@@ -30,9 +30,7 @@ trait ScalazProcessSupport {
 
   val parallelism = Runtime.getRuntime.availableProcessors()
 
-  val loggerSink = scalaz.stream.sink.lift[Task, Iterable[Result]] { list ⇒
-    Task.delay(log.debug(s"order-line: $list"))
-  }
+  val loggerSink = scalaz.stream.sink.lift[Task, Iterable[Result]](list ⇒ Task.delay(log.debug(s"order-line: $list")))
 
   val jsMapper = { cs: List[Combination] ⇒
     val init = JsObject("group" -> JsString(cs.head.groupKey), "body" -> JsArray())
@@ -66,10 +64,7 @@ trait ScalazProcessSupport {
 
   def queuePublisher(it: Iterator[List[Result]]): Process[Task, List[Result]] = {
     def go(iter: Iterator[List[Result]]): Process[Task, List[Result]] =
-      Process.await(Task.delay(iter)) { iter ⇒
-        if (iter.hasNext) Process.emit(iter.next) ++ go(iter)
-        else Process.halt
-      }
+      Process.await(Task.delay(iter))(iter ⇒ if (iter.hasNext) Process.emit(iter.next) ++ go(iter) else Process.halt)
     go(it)
   }
 

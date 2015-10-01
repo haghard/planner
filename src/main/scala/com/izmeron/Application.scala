@@ -28,15 +28,16 @@ object Application extends App {
   val httpPort = cfg.getConfig("planner").getInt("httpPort")
   val path = cfg.getConfig("planner").getString("indexFile")
   val coefficient = cfg.getConfig("planner").getDouble("coefficient")
-
-  /*val server = new com.izmeron.http.PlannerServer(path, httpPort,
+  /*
+  val server = new com.izmeron.http.PlannerServer(path, httpPort,
     org.apache.log4j.Logger.getLogger("planner-server"),
     minLenght, lenghtThreshold, coefficient, Version(0, 1, 0)) with Planner
   server.start()
 
   Runtime.getRuntime.addShutdownHook(new Thread(new Runnable {
     def run() = server.shutdown()
-  }))*/
+  }))
+  */
 
   parseLine(args.mkString(" "), cliParser).fold(runCli()) { _.start() }
 

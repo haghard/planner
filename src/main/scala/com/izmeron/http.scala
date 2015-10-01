@@ -119,7 +119,7 @@ object http {
                                coefficient: Double, val log: org.apache.log4j.Logger) extends async.Plan
       with ServerErrorResponse
       with AsyncContext
-      with ScalazProcessSupport {
+      with ScalazFlowSupport {
     import scalaz.stream.async
     import scalaz.stream.csv._
     import scalaz.stream.merge
