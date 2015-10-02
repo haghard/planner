@@ -14,11 +14,8 @@
 
 package com
 
-import com.izmeron.http.AsyncContext
-
 import scala.util.Try
-import scalaz.concurrent.Task
-import scalaz.{ -\/, \/-, \/ }
+import scalaz.\/
 import scala.annotation.tailrec
 import java.util.concurrent.Executors._
 
@@ -37,7 +34,9 @@ package object izmeron {
   //Fancy symbol from 1C provided file
   val cvsSpace = 160.toChar.toString
 
-  val PlannerEx = newFixedThreadPool(Runtime.getRuntime.availableProcessors(), new NamedThreadFactory("planner"))
+  val parallelism = Runtime.getRuntime.availableProcessors()
+
+  val PlannerEx = newFixedThreadPool(parallelism, new NamedThreadFactory("planner"))
 
   case class Order(kd: String, quantity: Int)
   case class Version(major: Int, minor: Int, bf: Int)
@@ -359,99 +358,4 @@ package object izmeron {
           (q / item.multiplicity) + item.profit + ((item.minQuant / item.multiplicity) - 1) * 2 + 4)
       }
     }
-
-  sealed trait CliCommand {
-    def start(): Unit
-  }
-
-  object Exit extends CliCommand {
-    override def start() = System.exit(0)
-  }
-
-  object Empty extends CliCommand {
-    override def start() = ()
-  }
-
-  object StaticCheck {
-    def apply(path: String, minLenght: Int, lenghtThreshold: Int): StaticCheck =
-      new StaticCheck(path, minLenght, lenghtThreshold)
-  }
-
-  class StaticCheck(override val path: String, override val minLenght: Int,
-                    override val lenghtThreshold: Int) extends CliCommand with Planner {
-    override val log = org.apache.log4j.Logger.getLogger("static-check")
-
-    val ok = "Ok"
-    val separator = ";"
-    val rule0 = "0. Max lenght rule violation"
-    val rule1 = "1. Multiplicity violation"
-
-    override def start() = {
-      maxLengthCheck.attemptRun.fold({ th: Throwable ⇒ println(s"${Ansi.errorMessage(th.getMessage)}") }, {
-        case ((\/-(elem), None)) ⇒
-          elem.fold(println(s"${Ansi.errorMessage("Can't perform check")}")) { maxLenElem ⇒
-            if (lenghtThreshold < maxLenElem.len) println(s"${Ansi.blueMessage(rule0)}: ${Ansi.errorMessage(s"Config value $lenghtThreshold but $maxLenElem has been found")}")
-            else println(s"${Ansi.blueMessage(rule0)}: ${Ansi.blueMessage(ok)}")
-          }
-        case ((-\/(ex)), None) ⇒ println(s"${Ansi.blueMessage(rule0)}: ${Ansi.errorMessage(ex.getMessage)}")
-        case other             ⇒ println(s"${Ansi.blueMessage(rule0)}: ${Ansi.errorMessage(other.toString())}")
-      })
-
-      multiplicityCheck.attemptRun.fold({ th: Throwable ⇒ println(s"${Ansi.errorMessage(th.getMessage)}") }, {
-        case ((\/-(list), None)) ⇒
-          if (list.isEmpty) println(s"${Ansi.blueMessage(rule1)}: ${Ansi.blueMessage(ok)}")
-          else println(s"${Ansi.blueMessage(rule1)}: ${Ansi.green(list.size.toString)}: ${Ansi.errorMessage(list.mkString(separator))}")
-        case ((-\/(ex)), None) ⇒ println(s"${Ansi.blueMessage(rule1)}: ${Ansi.errorMessage(ex.getMessage)}")
-        case other             ⇒ println(s"${Ansi.blueMessage(rule1)}: ${Ansi.errorMessage(other.toString())}")
-      })
-    }
-  }
-
-  object Plan {
-    def apply[T](path: String, outputDir: String, outFormat: String, minLenght: Int, lenghtThreshold: Int)(implicit writer: OutputWriter[T]): Plan[T] =
-      new Plan[T](path, outputDir, outFormat, minLenght, lenghtThreshold, writer)
-  }
-
-  class Plan[T](override val path: String, outputDir: String, outFormat: String, override val minLenght: Int,
-                override val lenghtThreshold: Int, writer: OutputWriter[T]) extends CliCommand with Planner with ScalazFlowSupport with AsyncContext {
-    import scalaz.stream.merge
-    import scalaz.stream.async
-
-    implicit val ex = PlannerEx
-    implicit val CpuIntensive = scalaz.concurrent.Strategy.Executor(PlannerEx)
-
-    override val log = org.apache.log4j.Logger.getLogger("planner")
-    private val queue = async.boundedQueue[List[Result]](parallelism * parallelism)
-
-    override def start(): Unit = {
-      createIndex.runAsync {
-        case \/-((\/-(index), None)) ⇒ {
-          println(Ansi.green("Index has been created"))
-          log.debug("Index has been created")
-          Task.fork {
-            (inputReader(orderReader.map(plan(_, index)), queue).drain merge merge.mergeN(parallelism)(cuttingWorkers(queue)))
-              .foldMap(writer.mapper(lenghtThreshold, _))(writer.monoid)
-              .runLast
-              .map(_.fold(writer.empty)(writer.convert[T]))
-          }.runAsync {
-            case \/-(result) ⇒
-              writer.write(result, outputDir).unsafePerformIO()
-              println(Ansi.green(s"$result"))
-            case -\/(error) ⇒
-              println(Ansi.red(s"${error.getClass.getName}: ${error.getStackTrace.mkString("\n")}: ${error.getMessage}"))
-              log.debug(s"${error.getClass.getName}: ${error.getStackTrace.mkString("\n")}: ${error.getMessage}")
-          }
-        }
-        case -\/(ex) ⇒
-          println(Ansi.red(s"${ex.getClass.getName}: ${ex.getStackTrace.mkString("\n")}: ${ex.getMessage}"))
-          log.debug(s"${ex.getClass.getName}: ${ex.getStackTrace.mkString("\n")}: ${ex.getMessage}")
-        case \/-((-\/(ex), None)) ⇒
-          println(Ansi.red(s"Error while building index: ${ex.getMessage}"))
-          log.debug(s"Error while building index: ${ex.getMessage}")
-        case \/-((_, Some(ex))) ⇒
-          println(Ansi.red(s"Finalizer error while building index: ${ex.getMessage}"))
-          log.debug(s"Finalizer error while building index: ${ex.getMessage}")
-      }
-    }
-  }
 }

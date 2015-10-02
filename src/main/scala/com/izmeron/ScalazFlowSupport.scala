@@ -27,8 +27,6 @@ trait ScalazFlowSupport {
   def lenghtThreshold: Int
   def log: org.apache.log4j.Logger
 
-  val parallelism = Runtime.getRuntime.availableProcessors()
-
   val loggerSink = scalaz.stream.sink.lift[Task, Iterable[Result]](list ⇒ Task.delay(log.debug(s"order-line: $list")))
 
   def queuePublisher(it: Iterator[List[Result]]): Process[Task, List[Result]] = {
@@ -52,7 +50,7 @@ trait ScalazFlowSupport {
    * @param S
    * @return
    */
-  def inputReader(src: scalaz.stream.Process[Task, scalaz.stream.Process[Task, List[Result]]],
+  def inputReader(src: Process[Task, Process[Task, List[Result]]],
                   queue: async.mutable.Queue[List[Result]])(implicit S: scalaz.concurrent.Strategy): Process[Task, Unit] =
     (merge.mergeN(parallelism)(src)(S) observe loggerSink)
       .map { list ⇒ list.headOption.fold(immutable.Map[String, List[Result]]())(head ⇒ immutable.Map(head.groupKey -> list)) }

@@ -14,6 +14,8 @@
 
 package com.izmeron
 
+import com.izmeron.commands.{ Exit, Plan, StaticCheck, CliCommand }
+import com.izmeron.out.{ ExcelOutputModule, JsonOutputModule }
 import sbt.complete.Parser
 import sbt.complete.DefaultParsers._
 import com.typesafe.config.ConfigFactory
@@ -83,15 +85,14 @@ object Application extends App {
   }
 
   def cliParser: Parser[CliCommand] = {
-    import OutputWriter._
     val pathLineParser = any.* map (_.mkString(""))
     val exit = token("exit" ^^^ Exit)
     val check = (token("check" ~ Space) ~> pathLineParser).map(args ⇒ StaticCheck(args, minLenght, lenghtThreshold))
     val plan = (token("plan" ~ Space) ~> pathLineParser ~ (token("--out" ~ Space) ~> (outFormatJ | outFormatE))).map { args ⇒
       val path = args._1.trim
       val format = args._2.trim
-      if (format == outFormatJ) Plan[spray.json.JsObject](path, outputDir, format, minLenght, lenghtThreshold)
-      else Plan[Set[info.folone.scala.poi.Row]](path, outputDir, format, minLenght, lenghtThreshold)
+      if (format == outFormatJ) Plan[JsonOutputModule](path, outputDir, format, minLenght, lenghtThreshold)
+      else Plan[ExcelOutputModule](path, outputDir, format, minLenght, lenghtThreshold)
     }
 
     exit | plan | check

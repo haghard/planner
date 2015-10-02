@@ -15,6 +15,7 @@
 package com.izmeron
 
 import java.util.concurrent.ExecutorService
+import com.izmeron.out.{ JsonOutputModule, OutputWriter }
 import io.netty.channel.ChannelHandler.Sharable
 import io.netty.channel.group.DefaultChannelGroup
 import io.netty.channel.nio.NioEventLoopGroup
@@ -70,7 +71,7 @@ object http {
                       override val log: org.apache.log4j.Logger,
                       override val minLenght: Int,
                       override val lenghtThreshold: Int,
-                      val v: Version) { mixin: Planner ⇒
+                      val v: Version) { mixin: OrigamiAggregator ⇒
 
     @volatile var http: Option[unfiltered.netty.Server] = None
     private val host = unfiltered.netty.Server.allInterfacesHost
@@ -113,7 +114,7 @@ object http {
   }
 
   @Sharable
-  final class HttpNettyHandler(server: PlannerServer with Planner, index: mutable.Map[String, RawResult],
+  final class HttpNettyHandler(server: PlannerServer with OrigamiAggregator, index: mutable.Map[String, RawResult],
                                val minLenght: Int, val lenghtThreshold: Int,
                                val log: org.apache.log4j.Logger) extends async.Plan
       with ServerErrorResponse
@@ -123,8 +124,7 @@ object http {
     import scalaz.stream.csv._
     import scalaz.stream.merge
     import OutputWriter._
-
-    val output = OutputWriter[spray.json.JsObject]
+    val output = OutputWriter[JsonOutputModule]
 
     override def intent: Intent = {
       case req ⇒
@@ -141,10 +141,10 @@ object http {
           case POST(Path("/orders")) ⇒
             forkTask {
               val queue = async.boundedQueue[List[Result]](parallelism * parallelism)
-              (inputReader(rowsR[Order](req.inputStream, ';').map(server.plan(_, index)), queue).drain merge merge.mergeN(parallelism)(cuttingWorkers(queue)))
-                .foldMap(output.mapper(lenghtThreshold, _))(output.monoid)
+              (inputReader(rowsR[Order](req.inputStream, ';').map(server.lookupFromIndex(_, index)), queue).drain merge merge.mergeN(parallelism)(cuttingWorkers(queue)))
+                .foldMap(output.monoidMapper(lenghtThreshold, _))(output.monoid)
                 .runLast
-                .map { _.fold(errorResponse(output.empty[String]))(json ⇒ jsonResponse(output.convert[String](json))) }
+                .map { _.fold(errorResponse(output.empty))(json ⇒ jsonResponse(output.convert(json))) }
             }
 
           case invalid ⇒
