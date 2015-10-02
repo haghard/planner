@@ -89,19 +89,15 @@ object OutputWriter {
 
     override def mapper: (Int, List[Combination]) ⇒ Set[Row] =
       (threshold, combinations) ⇒ {
-        counter.incrementAndGet()
-        val header = Set(Row(counter.get())(Set(StringCell(1, s"${combinations.head.groupKey} Макс длинна: $threshold"))))
+        val header = Set(Row(counter.incrementAndGet())(Set(StringCell(1, s"${combinations.head.groupKey} Макс длинна: $threshold"))))
         combinations./:(header) { (acc, c) ⇒
           val local = c.sheets./:(acc) { (acc0, c) ⇒
-            counter.incrementAndGet
-            acc0 + Row(counter.get) {
+            acc0 + Row(counter.incrementAndGet) {
               Set(StringCell(1, c.kd), NumericCell(2, c.lenght), NumericCell(3, c.quantity))
             }
           }
-          counter.incrementAndGet
-          val bottom = Row(counter.get)(Set(StringCell(1, s"Остаток: ${c.rest}"), StringCell(2, s"Длинна: ${threshold - c.rest}")))
-          counter.incrementAndGet
-          val separator = Row(counter.get)(Set())
+          val bottom = Row(counter.incrementAndGet)(Set(StringCell(1, s"Остаток: ${c.rest}"), StringCell(2, s"Длинна: ${threshold - c.rest}")))
+          val separator = Row(counter.incrementAndGet)(Set())
           local + bottom + separator
         }
       }
