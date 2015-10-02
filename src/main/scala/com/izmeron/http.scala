@@ -70,7 +70,6 @@ object http {
                       override val log: org.apache.log4j.Logger,
                       override val minLenght: Int,
                       override val lenghtThreshold: Int,
-                      override val coefficient: Double,
                       val v: Version) { mixin: Planner ⇒
 
     @volatile var http: Option[unfiltered.netty.Server] = None
@@ -89,7 +88,7 @@ object http {
           log.info("★ ★ ★  Index has been created  ★ ★ ★ ★ ★ ★")
           http = Option {
             unfiltered.netty.Server.bind(SocketBinding(httpPort, host))
-              .handler(new HttpNettyHandler(this, index, minLenght, lenghtThreshold, coefficient, log))
+              .handler(new HttpNettyHandler(this, index, minLenght, lenghtThreshold, log))
               .use(engine)
               .chunked(1048576)
               .beforeStop({
@@ -116,7 +115,7 @@ object http {
   @Sharable
   final class HttpNettyHandler(server: PlannerServer with Planner, index: mutable.Map[String, RawResult],
                                val minLenght: Int, val lenghtThreshold: Int,
-                               coefficient: Double, val log: org.apache.log4j.Logger) extends async.Plan
+                               val log: org.apache.log4j.Logger) extends async.Plan
       with ServerErrorResponse
       with AsyncContext
       with ScalazFlowSupport {
@@ -142,7 +141,7 @@ object http {
           case POST(Path("/orders")) ⇒
             forkTask {
               val queue = async.boundedQueue[List[Result]](parallelism * parallelism)
-              (inputReader(rowsR[Order](req.inputStream, ';').map(server.plan(_, index)), queue).drain merge merge.mergeN(parallelism)(cuttingWorkers(coefficient, queue)))
+              (inputReader(rowsR[Order](req.inputStream, ';').map(server.plan(_, index)), queue).drain merge merge.mergeN(parallelism)(cuttingWorkers(queue)))
                 .foldMap(output.mapper(lenghtThreshold, _))(output.monoid)
                 .runLast
                 .map { _.fold(errorResponse(output.empty[String]))(json ⇒ jsonResponse(output.convert[String](json))) }

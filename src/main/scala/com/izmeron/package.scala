@@ -100,7 +100,7 @@ package object izmeron {
    *
    *
    */
-  private[izmeron] def cuttingStockProblem(group: List[Result], threshold: Int, minLenght: Int, coefficient: Double,
+  private[izmeron] def cuttingStockProblem(group: List[Result], threshold: Int, minLenght: Int,
                                            log: org.apache.log4j.Logger): List[Combination] = {
     def unit(r: Result, ind: Int): StockUnit =
       StockUnit(ind, r.kd, r.groupKey, r.length)
@@ -176,7 +176,7 @@ package object izmeron {
       log.debug(s"lensCounts: $lensCounts")
       log.debug(s"lenMapping: $lensMapping")
 
-      collect(blocks, quantities, minLenght, threshold, coefficient, log, Nil).fold(List.empty[Combination]) {
+      collect(blocks, quantities, minLenght, threshold, log, Nil).fold(List.empty[Combination]) {
         _.map { cmb ⇒
           cmb.copy(groupKey = gk, sheets =
             cmb.sheets.flatMap { sheet ⇒
@@ -199,22 +199,22 @@ package object izmeron {
   }
 
   private[izmeron] def collect(blocks: Array[Int], quantities: Array[Int],
-                               minLenght: Int, sheetLength: Int, coefficient: Double,
+                               minLenght: Int, sheetLength: Int,
                                log: org.apache.log4j.Logger, items: List[Combination]): Option[List[Combination]] =
     cutNext(blocks, quantities, sheetLength, log) flatMap { cmb ⇒
       val (b, q) = crossOut(cmb)
-      if (q.length > 0) collect(b, q, minLenght, sheetLength, coefficient, log, cmb._1 :: items)
+      if (q.length > 0) collect(b, q, minLenght, sheetLength, log, cmb._1 :: items)
       else {
         if (q.length == 0 && cmb._1.sheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity) < minLenght) {
           @tailrec def redistribute(acc: Combination, collected: List[Combination]): List[Combination] =
             if (acc.rest < sheetLength - minLenght) acc :: collected
             else {
               val longest = collected.minBy(_.rest)
-              val otherC = collected diff List(longest)
+              val otherCollected = collected diff List(longest)
               val longestSheets = longest.sheets.flatMap(s ⇒ List.fill(s.quantity)(Sheet(s.kd, s.lenght, 1)))
               val min = longestSheets.minBy(r ⇒ r.lenght * r.quantity)
               val otherSheets = (longestSheets diff List(min))
-              val balance = Combination(sheets = otherSheets, rest = sheetLength - otherSheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)) :: otherC
+              val balance = Combination(sheets = otherSheets, rest = sheetLength - otherSheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)) :: otherCollected
               val updatedSheets = min :: acc.sheets
               redistribute(acc.copy(sheets = updatedSheets, rest = sheetLength - updatedSheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)), balance)
             }
@@ -373,12 +373,12 @@ package object izmeron {
   }
 
   object StaticCheck {
-    def apply(path: String, minLenght: Int, lenghtThreshold: Int, coefficient: Double): StaticCheck =
-      new StaticCheck(path, minLenght, lenghtThreshold, coefficient)
+    def apply(path: String, minLenght: Int, lenghtThreshold: Int): StaticCheck =
+      new StaticCheck(path, minLenght, lenghtThreshold)
   }
 
   class StaticCheck(override val path: String, override val minLenght: Int,
-                    override val lenghtThreshold: Int, override val coefficient: Double) extends CliCommand with Planner {
+                    override val lenghtThreshold: Int) extends CliCommand with Planner {
     override val log = org.apache.log4j.Logger.getLogger("static-check")
 
     val ok = "Ok"
@@ -408,13 +408,12 @@ package object izmeron {
   }
 
   object Plan {
-    def apply[T](path: String, outputDir: String, outFormat: String, minLenght: Int, lenghtThreshold: Int, coefficient: Double)(implicit writer: OutputWriter[T]): Plan[T] =
-      new Plan[T](path, outputDir, outFormat, minLenght, lenghtThreshold, coefficient, writer)
+    def apply[T](path: String, outputDir: String, outFormat: String, minLenght: Int, lenghtThreshold: Int)(implicit writer: OutputWriter[T]): Plan[T] =
+      new Plan[T](path, outputDir, outFormat, minLenght, lenghtThreshold, writer)
   }
 
   class Plan[T](override val path: String, outputDir: String, outFormat: String, override val minLenght: Int,
-                override val lenghtThreshold: Int, override val coefficient: Double,
-                writer: OutputWriter[T]) extends CliCommand with Planner with ScalazFlowSupport with AsyncContext {
+                override val lenghtThreshold: Int, writer: OutputWriter[T]) extends CliCommand with Planner with ScalazFlowSupport with AsyncContext {
     import scalaz.stream.merge
     import scalaz.stream.async
 
@@ -430,7 +429,7 @@ package object izmeron {
           println(Ansi.green("Index has been created"))
           log.debug("Index has been created")
           Task.fork {
-            (inputReader(orderReader.map(plan(_, index)), queue).drain merge merge.mergeN(parallelism)(cuttingWorkers(coefficient, queue)))
+            (inputReader(orderReader.map(plan(_, index)), queue).drain merge merge.mergeN(parallelism)(cuttingWorkers(queue)))
               .foldMap(writer.mapper(lenghtThreshold, _))(writer.monoid)
               .runLast
               .map(_.fold(writer.empty)(writer.convert[T]))

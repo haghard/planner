@@ -30,8 +30,6 @@ trait Planner {
 
   def minLenght: Int
 
-  def coefficient: Double
-
   def lenghtThreshold: Int
 
   def log: org.apache.log4j.Logger

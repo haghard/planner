@@ -17,7 +17,6 @@ package com.izmeron
 import scalaz.concurrent.Task
 
 trait ScalazFlowSupport {
-  import spray.json._
   import scala.collection._
   import scalaz.stream.merge
   import scalaz.stream.Process
@@ -40,13 +39,12 @@ trait ScalazFlowSupport {
 
   /**
    *
-   * @param coefficient
    * @param queue
    * @return
    */
-  def cuttingWorkers(coefficient: Double, queue: async.mutable.Queue[List[Result]]): Process[Task, Process[Task, List[Combination]]] =
+  def cuttingWorkers(queue: async.mutable.Queue[List[Result]]): Process[Task, Process[Task, List[Combination]]] =
     Process.range(0, parallelism)
-      .map(_ ⇒ queue.dequeue.map(cuttingStockProblem(_, lenghtThreshold, minLenght, coefficient, log)))
+      .map(_ ⇒ queue.dequeue.map(cuttingStockProblem(_, lenghtThreshold, minLenght, log)))
 
   /**
    *

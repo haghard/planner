@@ -27,7 +27,6 @@ object Application extends App {
   val minLenght = cfg.getConfig("planner.distribution").getInt("minLenght")
   val httpPort = cfg.getConfig("planner").getInt("httpPort")
   val path = cfg.getConfig("planner").getString("indexFile")
-  val coefficient = cfg.getConfig("planner").getDouble("coefficient")
   val outputDir = cfg.getConfig("planner").getString("outputDir")
 
   val outFormatJ = "json"
@@ -87,12 +86,12 @@ object Application extends App {
     import OutputWriter._
     val pathLineParser = any.* map (_.mkString(""))
     val exit = token("exit" ^^^ Exit)
-    val check = (token("check" ~ Space) ~> pathLineParser).map(args ⇒ StaticCheck(args, minLenght, lenghtThreshold, coefficient))
+    val check = (token("check" ~ Space) ~> pathLineParser).map(args ⇒ StaticCheck(args, minLenght, lenghtThreshold))
     val plan = (token("plan" ~ Space) ~> pathLineParser ~ (token("--out" ~ Space) ~> (outFormatJ | outFormatE))).map { args ⇒
       val path = args._1.trim
       val format = args._2.trim
-      if (format == outFormatJ) Plan[spray.json.JsObject](path, outputDir, format, minLenght, lenghtThreshold, coefficient)
-      else Plan[Set[info.folone.scala.poi.Row]](path, outputDir, format, minLenght, lenghtThreshold, coefficient)
+      if (format == outFormatJ) Plan[spray.json.JsObject](path, outputDir, format, minLenght, lenghtThreshold)
+      else Plan[Set[info.folone.scala.poi.Row]](path, outputDir, format, minLenght, lenghtThreshold)
     }
 
     exit | plan | check
