@@ -38,22 +38,21 @@ object OutputWriter {
 
     private val writerSheet = new spray.json.JsonWriter[Sheet] {
       override def write(s: Sheet): JsValue =
-        JsObject("kd" -> JsString(s.kd), "lenght" -> JsNumber(s.lenght),
-          "quantity" -> JsNumber(s.quantity))
+        JsObject("kd" -> JsString(s.kd),
+          "lenght" -> JsNumber(s.lenght), "quantity" -> JsNumber(s.quantity))
     }
 
     override def mapper: (Int, List[Combination]) ⇒ JsObject =
       (threshold, combinations) ⇒ {
         val init = JsObject("group" -> JsString(combinations.head.groupKey), "body" -> JsArray())
         combinations./:(init) { (acc, c) ⇒
-          val cur = JsObject(
-            "sheet" -> JsArray(c.sheets.toVector.map(writerSheet.write)),
-            "balance" -> JsNumber(c.rest),
-            "lenght" -> JsNumber(threshold - c.rest)
-          )
           JsObject(
             "group" -> acc.fields("group"),
-            "body" -> JsArray(acc.fields("body").asInstanceOf[JsArray].elements.:+(cur))
+            "body" -> JsArray(acc.fields("body").asInstanceOf[JsArray].elements.:+(JsObject(
+              "sheet" -> JsArray(c.sheets.toVector.map(writerSheet.write)),
+              "balance" -> JsNumber(c.rest),
+              "lenght" -> JsNumber(threshold - c.rest)
+            )))
           )
         }
       }
@@ -74,7 +73,6 @@ object OutputWriter {
   import info.folone.scala.poi._
   implicit val excel = new OutputWriter[Set[Row]] {
     import java.util.concurrent.atomic.AtomicInteger
-
     private val counter = new AtomicInteger(0)
 
     override val monoid = new scalaz.Monoid[Set[info.folone.scala.poi.Row]] {
@@ -82,13 +80,12 @@ object OutputWriter {
       override def append(f1: Set[Row], f2: ⇒ Set[Row]): Set[Row] = f1 ++ f2
     }
 
-    override def empty[A] = {
+    override def empty[A] =
       Workbook(Set(Sheet("empty") {
         Set(Row(0) {
           Set(StringCell(1, ""))
         })
       })).asInstanceOf[A]
-    }
 
     override def mapper: (Int, List[Combination]) ⇒ Set[Row] =
       (threshold, combinations) ⇒ {
