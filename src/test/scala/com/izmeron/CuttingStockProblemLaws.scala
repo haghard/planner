@@ -41,7 +41,7 @@ object CuttingStockProblemLaws extends Properties("CuttingStockProblemLaws") {
       if (list.size == Size && !list.exists(_.kd == "")) {
         logger.debug(s"in $count $list")
         count += 1
-        val combinations = cuttingStockProblem(list, threshold, minLenght, 1.2, logger)
+        val combinations = cuttingStockProblem(list, threshold, minLenght, logger)
 
         val expectedLength = list./:(0)((acc, c) ⇒ acc + c.length * c.cQuantity)
 

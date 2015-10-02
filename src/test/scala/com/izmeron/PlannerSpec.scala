@@ -86,7 +86,7 @@ class PlannerSpec extends Specification {
           Result("86401.905", "Сталь 20Х/120/56", 564, 1128, 2, 2, 1, 1, 0) ::
           Result("86602.038", "Сталь 20Х/120/56", 270, 1080, 4, 4, 1, 1, 0) :: Nil
 
-      val combinations = cuttingStockProblem(in, lenghtThreshold, minLenght, c, logger)
+      val combinations = cuttingStockProblem(in, lenghtThreshold, minLenght, logger)
       val expectedLength = in./:(0)((acc, c) ⇒ acc + c.length * c.cQuantity)
       val sumLen = combinations.map(_.sheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).sum
       val actual = combinations.find(e ⇒ lenghtThreshold - e.rest < minLenght)
@@ -106,7 +106,7 @@ class PlannerSpec extends Specification {
           Result("93901.00.05.201", "Сталь 20Х2Н4А/115/45", 514, 1028, 2, 2, 1, 1, 0) ::
           Result("93901.00.05.301", "Сталь 20Х2Н4А/115/45", 514, 1028, 2, 2, 1, 1, 0) :: Nil
 
-      val combinations = cuttingStockProblem(in, lenghtThreshold, minLenght, c, logger)
+      val combinations = cuttingStockProblem(in, lenghtThreshold, minLenght, logger)
       val expectedLength = in./:(0)((acc, c) ⇒ acc + c.length * c.cQuantity)
       val sumLen = combinations.map(_.sheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).sum
       val actual = combinations.find(e ⇒ lenghtThreshold - e.rest < minLenght)
@@ -128,7 +128,7 @@ class PlannerSpec extends Specification {
           Result("94100.001.007.072", "Сталь 38ХГМ/100/45", 170, 684, 4, 3, 1, 1, 0),
           Result("94100.001.007.072", "Сталь 38ХГМ/100/45", 170, 684, 4, 3, 1, 1, 0))
 
-      val combinations = cuttingStockProblem(in, lenghtThreshold, minLenght, c, logger)
+      val combinations = cuttingStockProblem(in, lenghtThreshold, minLenght, logger)
       val expectedLength = in./:(0)((acc, c) ⇒ acc + c.length * c.cQuantity)
       val sumLen = combinations.map(_.sheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).sum
       val actual = combinations.find(e ⇒ lenghtThreshold - e.rest < minLenght)
@@ -146,7 +146,7 @@ class PlannerSpec extends Specification {
       val in = Result("94900.04.701", "Сталь 38ХГМ/260/78", 437, 874, 2, 2, 1, 1, 0) ::
         Result("94900.04.751", "Сталь 38ХГМ/260/78", 437, 874, 2, 2, 1, 1, 0) :: Nil
 
-      val combinations = cuttingStockProblem(in, lenghtThreshold, minLenght, c, logger)
+      val combinations = cuttingStockProblem(in, lenghtThreshold, minLenght, logger)
       val expectedLength = in./:(0)((acc, c) ⇒ acc + c.length * c.cQuantity)
       val sumLen = combinations.map(_.sheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).sum
       val actual = combinations.find(e ⇒ lenghtThreshold - e.rest < minLenght)
@@ -166,7 +166,7 @@ class PlannerSpec extends Specification {
           Result("94900.04.751", "Сталь 38ХГМ/260/78", 437, 874, 2, 2, 1, 1, 0),
           Result("94900.04.751", "Сталь 38ХГМ/260/78", 437, 874, 2, 2, 1, 1, 0))
 
-      val combinations = cuttingStockProblem(in, lenghtThreshold, minLenght, c, logger)
+      val combinations = cuttingStockProblem(in, lenghtThreshold, minLenght, logger)
       val expectedLength = in./:(0)((acc, c) ⇒ acc + c.length * c.cQuantity)
       val sumLen = combinations.map(_.sheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).sum
       val actual = combinations.find(e ⇒ lenghtThreshold - e.rest < minLenght)
@@ -186,7 +186,7 @@ class PlannerSpec extends Specification {
           Result("94900.04.751", "Сталь 38ХГМ/260/78", 437, 874, 2, 2, 1, 1, 0),
           Result("94900.04.881", "Сталь 38ХГМ/260/78", 502, 1004, 2, 2, 1, 1, 0))
 
-      val combinations = cuttingStockProblem(in, lenghtThreshold, minLenght, c, logger)
+      val combinations = cuttingStockProblem(in, lenghtThreshold, minLenght, logger)
       val expectedLength = in./:(0)((acc, c) ⇒ acc + c.length * c.cQuantity)
       val sumLen = combinations.map(_.sheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).sum
       val actual = combinations.find(e ⇒ lenghtThreshold - e.rest < minLenght)
@@ -217,7 +217,7 @@ class PlannerSpec extends Specification {
           Result("93930.03.015", "Сталь 38ХГМ/120/32", 403, 806, 2, 2, 1, 1, 0), Result("93900.00.06.005", "Сталь 38ХГМ/120/32", 403, 806, 2, 2, 1, 1, 0),
           Result("93930.04.016", "Сталь 38ХГМ/120/32", 403, 806, 2, 2, 1, 1, 0))
 
-      val combinations = cuttingStockProblem(in, lenghtThreshold, minLenght, c, logger)
+      val combinations = cuttingStockProblem(in, lenghtThreshold, minLenght, logger)
       val expectedLength = in./:(0)((acc, c) ⇒ acc + c.length * c.cQuantity)
       val sumLen = combinations.map(_.sheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).sum
       val actual = combinations.find(e ⇒ lenghtThreshold - e.rest < minLenght)
@@ -240,7 +240,7 @@ class PlannerSpec extends Specification {
           Result("EF", "Сталь 38ХГМ-260-78", 432, 1728, 4, 4, 1, 1, 0), Result("RD", "Сталь 38ХГМ-260-78", 368, 1104, 3, 3, 1, 1, 0),
           Result("DV", "Сталь 38ХГМ-260-78", 399, 1596, 4, 4, 1, 1, 0), Result("TU", "Сталь 38ХГМ-260-78", 404, 404, 1, 1, 1, 1, 0))
 
-      val combinations = cuttingStockProblem(in, lenghtThreshold, 400, c, logger)
+      val combinations = cuttingStockProblem(in, lenghtThreshold, 400, logger)
       val expectedLength = in./:(0)((acc, c) ⇒ acc + c.length * c.cQuantity)
       val sumLen = combinations.map(_.sheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).sum
       val actual = combinations.find(e ⇒ lenghtThreshold - e.rest < minLenght)
@@ -262,7 +262,7 @@ class PlannerSpec extends Specification {
         Result("YS", "Сталь 38ХГМ-260-78", 357, 1428, 4, 4, 1, 1, 0), Result("RO", "Сталь 38ХГМ-260-78", 446, 892, 2, 2, 1, 1, 0),
         Result("RT", "Сталь 38ХГМ-260-78", 401, 401, 1, 1, 1, 1, 0))
 
-      val combinations = cuttingStockProblem(in, lenghtThreshold, 400, c, logger)
+      val combinations = cuttingStockProblem(in, lenghtThreshold, 400, logger)
       val expectedLength = in./:(0)((acc, c) ⇒ acc + c.length * c.cQuantity)
       val sumLen = combinations.map(_.sheets.foldLeft(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).sum
       val actual = combinations.find(e ⇒ lenghtThreshold - e.rest < minLenght)
@@ -285,7 +285,7 @@ class PlannerSpec extends Specification {
         Result("IA", "Сталь 38ХГМ-260-78", 418, 418, 1, 1, 1, 1, 0))
 
       val expectedLength = in./:(0)((acc, c) ⇒ acc + c.length * c.cQuantity)
-      val combinations = cuttingStockProblem(in, lenghtThreshold, 400, c, logger)
+      val combinations = cuttingStockProblem(in, lenghtThreshold, 400, logger)
       val sumLen = combinations.map(_.sheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).sum
       val actual = combinations.find(e ⇒ lenghtThreshold - e.rest < minLenght)
       val balance = combinations.map(_.rest).sum
@@ -307,7 +307,7 @@ class PlannerSpec extends Specification {
         Result("YO", "Сталь 38ХГМ-260-78", 393, 1572, 4, 4, 1, 1, 0))
 
       val expectedLength = in./:(0)((acc, c) ⇒ acc + c.length * c.cQuantity)
-      val combinations = cuttingStockProblem(in, lenghtThreshold, 400, c, logger)
+      val combinations = cuttingStockProblem(in, lenghtThreshold, 400, logger)
       val sumLen = combinations.map(_.sheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).sum
       val actual = combinations.find(e ⇒ lenghtThreshold - e.rest < minLenght)
       val balance = combinations.map(_.rest).sum
@@ -336,7 +336,7 @@ class PlannerSpec extends Specification {
         Result("HN", "Сталь 38ХГМ-260-78", 431, 431, 1, 1, 1, 1, 0))
 
       val expectedLength = in./:(0)((acc, c) ⇒ acc + c.length * c.cQuantity)
-      val combinations = cuttingStockProblem(in, lenghtThreshold, 400, c, logger)
+      val combinations = cuttingStockProblem(in, lenghtThreshold, 400, logger)
       val sumLen = combinations.map(_.sheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).sum
       val actual = combinations.find(e ⇒ lenghtThreshold - e.rest < minLenght)
       val balance = combinations.map(_.rest).sum
@@ -358,7 +358,7 @@ class PlannerSpec extends Specification {
 
       val expectedLength = in./:(0)((acc, c) ⇒ acc + c.length * c.cQuantity)
 
-      val combinations = cuttingStockProblem(in, lenghtThreshold, 400, c, logger)
+      val combinations = cuttingStockProblem(in, lenghtThreshold, 400, logger)
       val sumLen = combinations.map(_.sheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).sum
       val actual = combinations.find(e ⇒ lenghtThreshold - e.rest < minLenght)
       val balance = combinations.map(_.rest).sum
