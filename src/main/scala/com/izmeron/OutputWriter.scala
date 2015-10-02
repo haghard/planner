@@ -81,7 +81,7 @@ object OutputWriter {
     }
 
     override def empty[A] =
-      Workbook(Set(Sheet("empty") {
+      Workbook(Set(Sheet("plan") {
         Set(Row(0) {
           Set(StringCell(1, ""))
         })
