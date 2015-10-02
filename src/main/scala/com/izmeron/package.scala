@@ -198,20 +198,9 @@ package object izmeron {
     } else Nil
   }
 
-  private def flatQuantities(blocks: Array[Int], quantities: Array[Int]): List[Int] = {
-    var buffer = List.empty[Int]
-    var i = 0
-    while (i < quantities.length) {
-      buffer = List.fill(quantities(i))(blocks(i)) ++ buffer
-      i += 1
-    }
-    buffer
-  }
-
   private[izmeron] def collect(blocks: Array[Int], quantities: Array[Int],
                                minLenght: Int, sheetLength: Int, coefficient: Double,
-                               log: org.apache.log4j.Logger,
-                               items: List[Combination]): Option[List[Combination]] = {
+                               log: org.apache.log4j.Logger, items: List[Combination]): Option[List[Combination]] =
     cutNext(blocks, quantities, sheetLength, log) flatMap { cmb ⇒
       val (b, q) = crossOut(cmb)
       if (q.length > 0) collect(b, q, minLenght, sheetLength, coefficient, log, cmb._1 :: items)
@@ -222,18 +211,18 @@ package object izmeron {
             else {
               val longest = collected.minBy(_.rest)
               val otherC = collected diff List(longest)
-              val longestS = longest.sheets.flatMap(s ⇒ List.fill(s.quantity)(Sheet(s.kd, s.lenght, 1)))
-              val min = longestS.minBy(r ⇒ r.lenght * r.quantity)
-              val otherS = (longestS diff List(min))
-              val balance = Combination(sheets = otherS, rest = sheetLength - otherS./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)) :: otherC
+              val longestSheets = longest.sheets.flatMap(s ⇒ List.fill(s.quantity)(Sheet(s.kd, s.lenght, 1)))
+              val min = longestSheets.minBy(r ⇒ r.lenght * r.quantity)
+              val otherSheets = (longestSheets diff List(min))
+              val balance = Combination(sheets = otherSheets, rest = sheetLength - otherSheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)) :: otherC
               val updatedSheets = min :: acc.sheets
               redistribute(acc.copy(sheets = updatedSheets, rest = sheetLength - updatedSheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)), balance)
             }
+
           Option(redistribute(cmb._1, items))
         } else Option(cmb._1 :: items)
       }
     }
-  }
 
   private def crossOut(cmb: (Combination, Array[Int], Array[Int])): (Array[Int], Array[Int]) = {
     val blocks = cmb._2.toBuffer

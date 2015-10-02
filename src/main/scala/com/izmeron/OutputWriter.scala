@@ -36,7 +36,7 @@ object OutputWriter {
       }
     }
 
-    val writerSheet = new spray.json.JsonWriter[Sheet] {
+    private val writerSheet = new spray.json.JsonWriter[Sheet] {
       override def write(s: Sheet): JsValue =
         JsObject("kd" -> JsString(s.kd), "lenght" -> JsNumber(s.lenght),
           "quantity" -> JsNumber(s.quantity))
@@ -73,7 +73,9 @@ object OutputWriter {
 
   import info.folone.scala.poi._
   implicit val excel = new OutputWriter[Set[Row]] {
-    private var i = 0
+    import java.util.concurrent.atomic.AtomicInteger
+
+    private val counter = new AtomicInteger(0)
 
     override val monoid = new scalaz.Monoid[Set[info.folone.scala.poi.Row]] {
       override def zero: Set[Row] = Set.empty[Row]
@@ -90,18 +92,20 @@ object OutputWriter {
 
     override def mapper: (Int, List[Combination]) ⇒ Set[Row] =
       (threshold, combinations) ⇒ {
-        i += 1
-        val header = Set(Row(i)(Set(StringCell(1, combinations.head.groupKey))))
+        counter.incrementAndGet()
+        val header = Set(Row(counter.get())(Set(StringCell(1, s"${combinations.head.groupKey} Макс длинна: $threshold"))))
         combinations./:(header) { (acc, c) ⇒
           val local = c.sheets./:(acc) { (acc0, c) ⇒
-            i += 1
-            acc0 + Row(i) {
+            counter.incrementAndGet
+            acc0 + Row(counter.get) {
               Set(StringCell(1, c.kd), NumericCell(2, c.lenght), NumericCell(3, c.quantity))
             }
           }
-          i += 1
-          val bottom = Row(i)(Set(StringCell(1, s"Остаток: ${c.rest}"), StringCell(2, s"Длинна: ${threshold - c.rest}")))
-          local + bottom
+          counter.incrementAndGet
+          val bottom = Row(counter.get)(Set(StringCell(1, s"Остаток: ${c.rest}"), StringCell(2, s"Длинна: ${threshold - c.rest}")))
+          counter.incrementAndGet
+          val separator = Row(counter.get)(Set())
+          local + bottom + separator
         }
       }
 
