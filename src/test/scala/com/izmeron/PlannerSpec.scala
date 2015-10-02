@@ -19,63 +19,8 @@ import org.specs2.mutable.Specification
 class PlannerSpec extends Specification {
   var lenghtThreshold = 1400
   val minLenght = 400
-  val c = 1.2
+
   val logger = org.apache.log4j.Logger.getLogger("test-planner")
-
-  /*
-  "Read file and perform query" should {
-    "run" in {
-      import scalaz._, Scalaz._
-      import com.ambiata.origami._, Origami._
-      import com.ambiata.origami.stream.FoldableProcessM._
-      import com.ambiata.origami._, Origami._
-
-      object TestPlanner extends Planner {
-        override val log = logger
-        override val minLenght = 400
-        override val lenghtThreshold = 1200
-        override val path = "./cvs/metal2pipes2_.csv"
-
-        override def start(): Unit = {
-          //val (l,r) = (highs run csvProcess).run.run
-          //log.debug(s" $l - $r")
-          /*
-          val res = (groupByKey run csvProcess).run.run.values.find { line =>
-            line.count(_ == '-') > 1
-          }
-          res.fold(log.debug("0"))(line => log.debug(line))
-          */
-          val map = (groupByKeyMinLen run csvProcess).run.run
-          log.debug(s"Max: ${map.values.maxBy(_.length)}")
-
-          //logger.debug(map.maxBy(_._2.length))
-
-          /*val sames = map.filter { kv =>
-            val lens = kv._2.split("-")
-            var ind = 0
-            var found = false
-
-            while(!found && ind < lens.size) {
-              val current = lens(ind)
-              ind += 1
-              found = lens.filter(_ == current).size > 2
-            }
-            found
-          }
-
-          logger.debug(sames.size)
-          logger.debug(sames)*/
-
-        }
-
-        override def shutdown(): Unit = ???
-      }
-
-      TestPlanner.start()
-      1 === 1
-    }
-  }
-  */
 
   "cuttingStockProblem" should {
     "scenario0" in {
