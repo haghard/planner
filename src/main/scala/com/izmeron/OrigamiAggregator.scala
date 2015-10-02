@@ -118,8 +118,7 @@ trait OrigamiAggregator {
         log.error(s"Can't find kd:[$kd] in current index")
         Process.emit(List.empty[Result])
       }, { seq ⇒
-        Process.emit(groupByOptimalNumber(ord, lenghtThreshold, minLenght, log)(seq))
-          .map { list: List[Result] ⇒ distributeWithinGroup(lenghtThreshold, minLenght, log)(list) }
+        Process.emit(distributeWithinGroup(lenghtThreshold, minLenght, log)(groupByOptimalNumber(ord, lenghtThreshold, minLenght, log)(seq)))
       })
     }
 }
