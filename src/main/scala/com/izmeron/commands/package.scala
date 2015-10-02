@@ -14,7 +14,6 @@
 
 package com.izmeron
 
-import com.izmeron.http.AsyncContext
 import com.izmeron.out.{OutputWriter, OutputModule}
 
 import scalaz.concurrent.Task
@@ -78,7 +77,7 @@ package object commands {
 
   final class Plan[T <: OutputModule](override val path: String, outputDir: String, outFormat: String, override val minLenght: Int,
                       override val lenghtThreshold: Int, writer: OutputWriter[T]) extends CliCommand with OrigamiAggregator
-  with ScalazFlowSupport with AsyncContext {
+  with ScalazFlowSupport {
     import scalaz.stream.merge
     import scalaz.stream.async
 

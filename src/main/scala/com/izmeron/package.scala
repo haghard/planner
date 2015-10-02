@@ -212,7 +212,7 @@ package object izmeron {
               val otherCollected = collected diff List(longest)
               val longestSheets = longest.sheets.flatMap(s ⇒ List.fill(s.quantity)(Sheet(s.kd, s.lenght, 1)))
               val min = longestSheets.minBy(r ⇒ r.lenght * r.quantity)
-              val otherSheets = (longestSheets diff List(min))
+              val otherSheets = longestSheets diff List(min)
               val balance = Combination(sheets = otherSheets, rest = sheetLength - otherSheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)) :: otherCollected
               val updatedSheets = min :: acc.sheets
               redistribute(acc.copy(sheets = updatedSheets, rest = sheetLength - updatedSheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)), balance)
