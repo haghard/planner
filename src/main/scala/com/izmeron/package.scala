@@ -212,50 +212,26 @@ package object izmeron {
                                minLenght: Int, sheetLength: Int, coefficient: Double,
                                log: org.apache.log4j.Logger,
                                items: List[Combination]): Option[List[Combination]] = {
-    @tailrec def distributeLast(currentLen: Int, min: Int, acc: List[Sheet],
-                                combination: Combination): (List[Sheet], Combination) = {
-      val sheet = combination.sheets.head
-      val updatedLen = currentLen + (sheet.lenght * sheet.quantity)
-      if (updatedLen < min) distributeLast(updatedLen, min, Sheet(sheet.kd, sheet.lenght, sheet.quantity) :: acc,
-        combination.copy(sheets = combination.sheets.tail))
-      else (Sheet(sheet.kd, sheet.lenght, sheet.quantity) :: acc, combination.copy(sheets = combination.sheets.tail, rest = combination.rest + sheet.lenght))
-    }
-
     cutNext(blocks, quantities, sheetLength, log) flatMap { cmb ⇒
       val (b, q) = crossOut(cmb)
-
-      if (q.length > 0) {
-        //distribute manually last chunks
-        var i = 0
-        var balanceLen = 0
-        while (i < q.length) {
-          balanceLen += q(i) * b(i)
-          i += 1
-        }
-
-        if (q.length >= 2 && (balanceLen / q.sum) < (minLenght * coefficient)) {
-          val sortedBuffer = flatQuantities(b, q).sorted
-          if (sortedBuffer.sum <= sheetLength) {
-            val list = sortedBuffer.map(i ⇒ Sheet(lenght = i, quantity = 1))
-            Option(List(Combination(sheets = list, rest = sheetLength - list./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity))))
-          } else {
-            Option {
-              sortedBuffer.grouped(2).map { list ⇒
-                list.map(i ⇒ Sheet(lenght = i, quantity = 1))
-              }.map(list ⇒ Combination(sheets = list, rest = sheetLength - list./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity))).toList
+      if (q.length > 0) collect(b, q, minLenght, sheetLength, coefficient, log, cmb._1 :: items)
+      else {
+        if (q.length == 0 && cmb._1.sheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity) < minLenght) {
+          @tailrec def redistribute(acc: Combination, collected: List[Combination]): List[Combination] =
+            if (acc.rest < sheetLength - minLenght) acc :: collected
+            else {
+              val longest = collected.minBy(_.rest)
+              val otherC = collected diff List(longest)
+              val longestS = longest.sheets.flatMap(s ⇒ List.fill(s.quantity)(Sheet(s.kd, s.lenght, 1)))
+              val min = longestS.minBy(r ⇒ r.lenght * r.quantity)
+              val otherS = (longestS diff List(min))
+              val balance = Combination(sheets = otherS, rest = sheetLength - otherS./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)) :: otherC
+              val updatedSheets = min :: acc.sheets
+              redistribute(acc.copy(sheets = updatedSheets, rest = sheetLength - updatedSheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)), balance)
             }
-          }
-        } else if (balanceLen < minLenght) {
-          val sorted = cmb._1.copy(sheets = cmb._1.sheets.flatMap { s ⇒
-            List.fill(s.quantity)(Sheet(s.kd, s.lenght, 1))
-          }.sortWith(_.lenght - _.lenght < 0))
-          val firstPart = flatQuantities(b, q)./:(List.empty[Sheet])((acc, c) ⇒ Sheet(lenght = c, quantity = 1) :: acc)
-          val (secondPart, old) = distributeLast(balanceLen, minLenght, Nil, sorted)
-          val updatedSheets = firstPart ::: secondPart
-          val sumLen = updatedSheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)
-          Option(List(Combination(sheets = updatedSheets, groupKey = old.groupKey, rest = sheetLength - sumLen), old))
-        } else collect(b, q, minLenght, sheetLength, coefficient, log, cmb._1 :: items)
-      } else Option(cmb._1 :: items)
+          Option(redistribute(cmb._1, items))
+        } else Option(cmb._1 :: items)
+      }
     }
   }
 

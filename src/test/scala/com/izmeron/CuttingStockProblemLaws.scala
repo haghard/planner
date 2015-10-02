@@ -17,7 +17,7 @@ package com.izmeron
 import org.scalacheck._
 import Prop._
 
-object CuttingStockProblemLaws extends Properties("CuttingStockProblemSpec") {
+object CuttingStockProblemLaws extends Properties("CuttingStockProblemLaws") {
   var count = 0
   val Size = 13
   val maxSize = 450
@@ -43,11 +43,14 @@ object CuttingStockProblemLaws extends Properties("CuttingStockProblemSpec") {
         count += 1
         val combinations = cuttingStockProblem(list, threshold, minLenght, 1.2, logger)
 
+        val expectedLength = list./:(0)((acc, c) ⇒ acc + c.length * c.cQuantity)
+
         val sumLen = combinations.map(_.sheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).sum
         val actual = combinations.find(e ⇒ threshold - e.rest < minLenght)
         val balance = combinations.map(_.rest).sum
 
         (list.size == Size) :| "Batch size isn't obeyed" &&
+          (expectedLength == sumLen) :| "Final sum doesn't match" &&
           actual.isEmpty :| "Impossible element has been found" &&
           ((sumLen + balance) == combinations.size * threshold) :| "Final size isn't corresponded"
       } else { true :| "Check nothing" }
