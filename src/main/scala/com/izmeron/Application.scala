@@ -34,10 +34,9 @@ object Application extends App {
   val outFormatJ = "json"
   val outFormatE = "excel"
 
-  val server = new com.izmeron.http.PlannerServer(path, httpPort,
+  new com.izmeron.http.PlannerServer(path, httpPort,
     org.apache.log4j.Logger.getLogger("planner-server"),
-    minLenght, lenghtThreshold, Version(0, 1, 0))
-  server.start()
+    minLenght, lenghtThreshold, Version(0, 1, 0)).start()
 
   /*
   parseLine(args.mkString(" "), cliParser).fold(runCli()) { _.start() }

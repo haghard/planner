@@ -14,14 +14,13 @@
 
 package com.izmeron
 
-import java.util.concurrent.Executors
-import org.http4s.{ TransferCoding, Response }
-import scalaz.concurrent.Task
-import scalaz.{ -\/, \/- }
-import org.apache.log4j.Logger
-import org.http4s.server.blaze.BlazeBuilder
 import org.http4s.dsl._
-import org.http4s.headers.{ `Transfer-Encoding` }
+import scalaz.{ -\/, \/- }
+import scalaz.concurrent.Task
+import java.util.concurrent.Executors
+import org.http4s.server.blaze.BlazeBuilder
+import org.http4s.{ TransferCoding, Response }
+import org.http4s.headers.`Transfer-Encoding`
 
 object http {
 
@@ -34,17 +33,13 @@ object http {
   val httpExec = Executors.newFixedThreadPool(Runtime.getRuntime.availableProcessors(),
     new NamedThreadFactory("http-worker"))
 
-  class PlannerServer(val path0: String, httpPort0: Int,
-                      val log0: org.apache.log4j.Logger,
-                      val minLenght0: Int,
-                      val lenghtThreshold0: Int,
-                      val v: Version) {
+  class PlannerServer(val path0: String, httpPort0: Int, val log0: org.apache.log4j.Logger,
+                      val minLenght0: Int, val lenghtThreshold0: Int, val v: Version) {
     private val aggregator = new OrigamiAggregator with ScalazFlowSupport {
-      override def path = path0
-      override def minLenght = minLenght0
-      override def log: Logger = log0
-      override def lenghtThreshold = lenghtThreshold0
-      override def start(): Unit = ???
+      override val path = path0
+      override val minLenght = minLenght0
+      override val log = log0
+      override val lenghtThreshold = lenghtThreshold0
     }
 
     def start() = {
@@ -70,7 +65,5 @@ object http {
           System.exit(-1)
       }
     }
-
-    def shutdown(): Unit = ???
   }
 }

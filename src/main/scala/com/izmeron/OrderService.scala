@@ -16,13 +16,10 @@
 
 package com.izmeron
 
-import java.io.StringReader
 import java.nio.charset.StandardCharsets
-
 import com.izmeron.out.{ OutputWriter, JsonOutputModule }
 import org.http4s.dsl._
 import org.http4s.server.HttpService
-import scodec.Codec
 import com.izmeron.http._
 import scala.collection.mutable
 import scalaz.concurrent.Task
@@ -38,14 +35,15 @@ object OrderService {
   implicit val CpuIntensive = scalaz.concurrent.Strategy.Executor(PlannerEx)
   implicit val Codec: scala.io.Codec = scala.io.Codec.UTF8
 
-  private val codec: Codec[String] = scodec.codecs.utf8
-  private val decodeUtf = scodec.stream.decode.many(codec)
-  private var lenghtThreshold = 0
-  private var logger: org.apache.log4j.Logger = null
-  private var index = mutable.Map[String, RawResult]()
-  private var aggregator: OrigamiAggregator with ScalazFlowSupport = null
-  private val writer = OutputWriter[JsonOutputModule]
+
   private val sep = ';'
+  private var lenghtThreshold = 0
+  private var logger: org.apache.log4j.Logger = _
+  private val writer = OutputWriter[JsonOutputModule]
+  private var index = mutable.Map[String, RawResult]()
+  private var aggregator: OrigamiAggregator with ScalazFlowSupport = _
+  private val decodeUtf = scodec.stream.decode.many(scodec.codecs.utf8)
+
   def apply(aggregator: OrigamiAggregator with ScalazFlowSupport,
             index: mutable.Map[String, RawResult],
             lenghtThreshold: Int,
@@ -66,8 +64,8 @@ object OrderService {
         .flatMap { lines ⇒
           val src = rowsR[Order](new java.io.ByteArrayInputStream(lines.getBytes(StandardCharsets.UTF_8)), sep).map(aggregator.lookupFromIndex(_, index))
           (aggregator.inputReader(src, queue).drain merge merge.mergeN(parallelism)(aggregator.cuttingWorkers(queue)))
-            .map { res: List[Combination] ⇒ s"${writer.monoidMapper(lenghtThreshold, res).prettyPrint}\n" }
-            .onFailure{th ⇒ P.emit(s"{ Error: ${th.getClass.getName} ${th.getMessage}}")}
+            .map { list ⇒ s"${writer.monoidMapper(lenghtThreshold, list).prettyPrint}\n" }
+            .onFailure { th ⇒ P.emit(s"{ Error: ${th.getClass.getName} ${th.getMessage}}") }
         }
       Ok(flow).chunked
   }
@@ -77,9 +75,6 @@ object OrderService {
       scalaz.stream.Process.await(Task.delay(iter)) { iter ⇒
         if (iter.hasNext) {
           val line = s"${iter.next}\n"
-          val r = scalaz.stream.csv.rowsR[Order](line, ';')
-
-          Thread.sleep(500)
           scalaz.stream.Process.emit(line) ++ loop(iter)
         } else scalaz.stream.Process.halt
       }

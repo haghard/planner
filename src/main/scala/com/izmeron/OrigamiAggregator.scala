@@ -54,8 +54,6 @@ trait OrigamiAggregator {
     scalaz.stream.csv.rowsR[Order](path, ';')
       .onFailure { th ⇒ log.debug(s"OrderReader Failure: ${th.getMessage}"); Process.halt }
 
-  def start(): Unit
-
   private[izmeron] def maxLen: FoldM[SafeTTask, Etalon, Option[Etalon]] =
     maximumBy[Etalon, Int] { e: Etalon ⇒ e.len }.into[SafeTTask]
 
