@@ -14,6 +14,7 @@
 
 package com.izmeron
 
+import java.util.concurrent.Executors
 import org.http4s.{ TransferCoding, Response }
 import scalaz.concurrent.Task
 import scalaz.{ -\/, \/- }
@@ -30,12 +31,15 @@ object http {
     }
   }
 
+  val httpExec = Executors.newFixedThreadPool(Runtime.getRuntime.availableProcessors(),
+    new NamedThreadFactory("http-worker"))
+
   class PlannerServer(val path0: String, httpPort0: Int,
                       val log0: org.apache.log4j.Logger,
                       val minLenght0: Int,
                       val lenghtThreshold0: Int,
                       val v: Version) {
-    private val aggregator = new OrigamiAggregator {
+    private val aggregator = new OrigamiAggregator with ScalazFlowSupport {
       override def path = path0
       override def minLenght = minLenght0
       override def log: Logger = log0
@@ -45,12 +49,13 @@ object http {
 
     def start() = {
       log0.debug("★ ★ ★ ★ ★ ★  Index creation has been started  ★ ★ ★ ★ ★ ★")
-
       aggregator.createIndex.runAsync {
         case \/-((\/-(index), None)) ⇒
           log0.info("★ ★ ★  Index has been created  ★ ★ ★ ★ ★ ★")
           BlazeBuilder.bindHttp(httpPort0, "127.0.0.1")
-            .mountService(OrderService(aggregator), "/")
+            .mountService(OrderService(aggregator, index, lenghtThreshold0, log0), "/")
+            .withServiceExecutor(httpExec)
+            .withNio2(true)
             .run
             .awaitShutdown()
           log0.debug(s"★ ★ ★ ★ ★ ★  Http server started on 127.0.0.1:$httpPort0 ★ ★ ★ ★ ★ ★")
@@ -68,39 +73,4 @@ object http {
 
     def shutdown(): Unit = ???
   }
-
-  /*
-    with ScalazFlowSupport {
-    import scalaz.stream.async
-    import scalaz.stream.csv._
-    import scalaz.stream.merge
-    import OutputWriter._
-    val output = OutputWriter[JsonOutputModule]
-
-    override def intent: Intent = {
-      case req ⇒
-        implicit val ex = PlannerEx
-        implicit val CpuIntensive = scalaz.concurrent.Strategy.Executor(PlannerEx)
-        implicit val Codec: scala.io.Codec = scala.io.Codec.UTF8
-        implicit val responder: unfiltered.Async.Responder[Any] = req
-        req match {
-          case GET(Path("/info")) ⇒
-            req.respond(textResponse { server.log.debug("GET /info"); server.v.toString })
-
-          //echo '94100.00.00.072;5' | curl -d @- http://127.0.0.1:9001/orders
-          //http POST http://127.0.0.1:9001/orders < ./cvs/order.csv
-          case POST(Path("/orders")) ⇒
-            forkTask {
-              val queue = async.boundedQueue[List[Result]](parallelism * parallelism)
-              (inputReader(rowsR[Order](req.inputStream, ';').map(server.lookupFromIndex(_, index)), queue).drain merge merge.mergeN(parallelism)(cuttingWorkers(queue)))
-                .foldMap(output.monoidMapper(lenghtThreshold, _))(output.monoid)
-                .runLast
-                .map { _.fold(errorResponse(output.empty))(json ⇒ jsonResponse(output.convert(json))) }
-            }
-
-          case invalid ⇒
-            responder.respond(methodNotAllowed(s"Method:${invalid.method} Uri:${invalid.uri}"))
-        }
-    }
-  }*/
 }
