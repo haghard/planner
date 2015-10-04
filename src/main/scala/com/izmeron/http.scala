@@ -141,7 +141,7 @@ object http {
           case POST(Path("/orders")) ⇒
             forkTask {
               val queue = async.boundedQueue[List[Result]](parallelism * parallelism)
-              (inputReader(rowsR[Order](req.inputStream, ';').map(server.lookupFromIndex(_, index)), queue).drain merge merge.mergeN(parallelism)(cuttingWorkers(queue)))
+              (inputReader(rowsR[Order](req.inputStream, ';').map(server.distribute(_, index)), queue).drain merge merge.mergeN(parallelism)(cuttingStock(queue)))
                 .foldMap(output.monoidMapper(lenghtThreshold, _))(output.monoid)
                 .runLast
                 .map { _.fold(errorResponse(output.empty))(json ⇒ jsonResponse(output.convert(json))) }

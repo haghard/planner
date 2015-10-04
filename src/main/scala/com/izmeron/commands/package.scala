@@ -88,14 +88,28 @@ package object commands {
     override val log = org.apache.log4j.Logger.getLogger("planner")
     private val queue = async.boundedQueue[List[Result]](parallelism * parallelism)
 
-    //
+    /**
+     * Computation graph
+     *
+     * File            Parallel stage                                         Parallel stage
+     * +----------+   +-----------+                                          +------------+
+     * |csv_line0 |---|distribute |--+                                  +----|cuttingStock|----+
+     * +----------+   +-----------+  |  Fan-in stage                    |    +------------+    |
+     * +----------+   +-----------+  |  +----------+  +-------------+   |    +------------+    |  +------------+   +-------+
+     * |csv_line1 |---|distribute |-----|foldMonoid|--|bounded queue|--------|cuttingStock|-------|monoidMapper|---|convert|
+     * +----------+   +-----------+  |  +----------+  +-------------+   |    +------------+    |  +------------+   +-------+
+     *                               |                                  |    +------------+    |
+     * +----------+   +-----------+  |                                  +----|cuttingStock|----+
+     * |csv_line2 |---|distribute |--+                                       +------------+
+     * +----------+   +-----------+
+     */
     override def start(): Unit = {
       createIndex.runAsync {
         case \/-((\/-(index), None)) ⇒ {
           println(Ansi.green("Index has been created"))
           log.debug("Index has been created")
           Task.fork {
-            (inputReader(orderReader map (lookupFromIndex(_, index)), queue).drain merge merge.mergeN(parallelism)(cuttingWorkers(queue)))
+            (inputReader(orderReader map (distribute(_, index)), queue).drain merge merge.mergeN(parallelism)(cuttingStock(queue)))
               .foldMap(writer.monoidMapper(lenghtThreshold, _))(writer.monoid)
               .runLast
               .map(_.fold(writer.empty)(writer.convert))

@@ -40,7 +40,7 @@ trait ScalazFlowSupport {
    * @param queue
    * @return
    */
-  def cuttingWorkers(queue: async.mutable.Queue[List[Result]]): Process[Task, Process[Task, List[Combination]]] =
+  def cuttingStock(queue: async.mutable.Queue[List[Result]]): Process[Task, Process[Task, List[Combination]]] =
     Process.range(0, parallelism)
       .map(_ ⇒ queue.dequeue.map(cuttingStockProblem(_, lenghtThreshold, minLenght, log)))
 
