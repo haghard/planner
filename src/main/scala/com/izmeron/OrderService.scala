@@ -58,15 +58,31 @@ object OrderService {
   private val service = HttpService {
     case req @ POST -> Root / "orders" ⇒
       val queue = async.boundedQueue[List[Result]](parallelism * parallelism)
-      val flow =  for {
+
+      /**
+       * Computation graph
+       *
+       * File            Parallel stage                                  Parallel stage
+       * +----------+   +-----------+                                    +------------+   +------------+
+       * |csv_line0 |---|distribute |--+                            +----|cuttingStock|---|monoidMapper|
+       * +----------+   +-----------+  |  Fan-in stage              |    +------------+   +------------+
+       * +----------+   +-----------+  |  +----------+  +-------+   |    +------------+   +------------+
+       * |csv_line1 |---|distribute |-----|foldMonoid|--| queue |--------|cuttingStock|---|monoidMapper|
+       * +----------+   +-----------+  |  +----------+  +-------+   |    +------------+   +------------+
+       *                               |                            |    +------------+   +------------+
+       * +----------+   +-----------+  |                            +----|cuttingStock|---|monoidMapper|
+       * |csv_line2 |---|distribute |--+                                 +------------+   +------------+
+       * +----------+   +-----------+
+       */
+      val graph =  for {
         bv <- req.body.map(_.toBitVector)
         lines <- decodeUtf decode bv
-        src = rowsR[Order](new java.io.ByteArrayInputStream(lines.getBytes(StandardCharsets.UTF_8)), sep).map(aggregator.lookupFromIndex(_, index))
-        out <- (aggregator.inputReader(src, queue).drain merge merge.mergeN(parallelism)(aggregator.cuttingWorkers(queue)))
+        linesSrc = rowsR[Order](new java.io.ByteArrayInputStream(lines.getBytes(StandardCharsets.UTF_8)), sep)
+        out <- (aggregator.sourceToQueue(linesSrc.map(aggregator.distribute(_, index)), queue).drain merge merge.mergeN(parallelism)(aggregator.cuttingStock(queue)))
           .map { list ⇒ s"${writer.monoidMapper(lenghtThreshold, list).prettyPrint}\n" }
           .onFailure { th ⇒ P.emit(s"{ Error: ${th.getClass.getName}: ${th.getMessage}}") }
       } yield out
-      Ok(flow).chunked
+      Ok(graph).chunked
   }
 
   private def lines(iter: Iterator[String]) = {

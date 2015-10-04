@@ -40,7 +40,7 @@ trait ScalazFlowSupport {
    * @param queue
    * @return
    */
-  def cuttingWorkers(queue: async.mutable.Queue[List[Result]]): Process[Task, Process[Task, List[Combination]]] =
+  def cuttingStock(queue: async.mutable.Queue[List[Result]]): Process[Task, Process[Task, List[Combination]]] =
     Process.range(0, parallelism)
       .map(_ ⇒ queue.dequeue.map(cuttingStockProblem(_, lenghtThreshold, minLenght, log)))
 
@@ -50,8 +50,8 @@ trait ScalazFlowSupport {
    * @param S
    * @return
    */
-  def inputReader(src: Process[Task, Process[Task, List[Result]]],
-                  queue: async.mutable.Queue[List[Result]])(implicit S: scalaz.concurrent.Strategy): Process[Task, Unit] =
+  def sourceToQueue(src: Process[Task, Process[Task, List[Result]]],
+                    queue: async.mutable.Queue[List[Result]])(implicit S: scalaz.concurrent.Strategy): Process[Task, Unit] =
     (merge.mergeN(parallelism)(src)(S) observe loggerSink)
       .map { list ⇒ list.headOption.fold(immutable.Map[String, List[Result]]())(head ⇒ immutable.Map(head.groupKey -> list)) }
       .foldMonoid

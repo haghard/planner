@@ -94,7 +94,7 @@ package object commands {
           println(Ansi.green("Index has been created"))
           log.debug("Index has been created")
           Task.fork {
-            (inputReader(orderReader map (lookupFromIndex(_, index)), queue).drain merge merge.mergeN(parallelism)(cuttingWorkers(queue)))
+            (sourceToQueue(orderReader map (distribute(_, index)), queue).drain merge merge.mergeN(parallelism)(cuttingStock(queue)))
               .foldMap(writer.monoidMapper(lenghtThreshold, _))(writer.monoid)
               .runLast
               .map(_.fold(writer.empty)(writer.convert))

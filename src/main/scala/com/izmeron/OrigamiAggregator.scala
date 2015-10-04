@@ -108,7 +108,7 @@ trait OrigamiAggregator {
   def createIndex: Task[(Throwable \/ mutable.Map[String, RawResult], Option[FinalizersException])] =
     Task.fork((buildIndex run indexReader).attemptRun)(PlannerEx)
 
-  def lookupFromIndex(ord: com.izmeron.Order, index: mutable.Map[String, RawResult]): scalaz.stream.Process[Task, List[Result]] =
+  def distribute(ord: com.izmeron.Order, index: mutable.Map[String, RawResult]): scalaz.stream.Process[Task, List[Result]] =
     Process.await(Task.delay(index.get(ord.kd))) { values: Option[RawResult] ⇒
       values.fold(Process.emit(-\/(ord.kd): Or)) { result: RawResult ⇒ Process.emit(\/-(result): Or) }
     }.flatMap {
