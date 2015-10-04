@@ -70,7 +70,7 @@ object Application extends App {
       print(s"${Ansi.blueMessage("--RUN-- ")}")
       c match {
         case None ⇒
-          println(s"${Ansi.green("Unknown command: Please use [exit, check, plan]")}")
+          println(s"${Ansi.green("Unknown command: Please use commands [exit, check, plan]")}")
           loop()
         case Some(Exit) ⇒
           println(s"${Ansi.green("exit")}")
