@@ -43,7 +43,7 @@ package object commands {
       new StaticCheck(path, minLenght, lenghtThreshold)
   }
 
-  final class StaticCheck(override val path: String, override val minLenght: Int,
+  final class StaticCheck(override val indexPath: String, override val minLenght: Int,
                           override val lenghtThreshold: Int) extends CliCommand with OrigamiAggregator {
     import StaticCheck._
     override val log = org.apache.log4j.Logger.getLogger("static-check")
@@ -75,7 +75,7 @@ package object commands {
       new Plan[T](path, outputDir, outFormat, minLenght, lenghtThreshold, writer)
   }
 
-  final class Plan[T <: OutputModule](override val path: String, outputDir: String, outFormat: String, override val minLenght: Int,
+  final class Plan[T <: OutputModule](override val indexPath: String, outputDir: String, outFormat: String, override val minLenght: Int,
                       override val lenghtThreshold: Int, writer: OutputWriter[T]) extends CliCommand with OrigamiAggregator
   with ScalazFlowSupport {
     import scalaz.stream.merge

@@ -57,16 +57,15 @@ resolvers ++= Seq(
   "oncue.bintray"          at "http://dl.bintray.com/oncue/releases"
 )
 
-//https://dl.bintray.com/oncue/releases/oncue/knobs/core_2.11/3.3.3/
 libraryDependencies ++= Seq(
   "log4j"               %   "log4j"                   %   "1.2.14",
   "oncue.knobs"         %%  "core"                    %   "3.3.3",
   "io.spray"            %%  "spray-json"              %   "1.3.2",
   "com.nrinaudo"        %%  "scalaz-stream-csv"       %   "0.1.3",
-  "org.scala-sbt"       %   "completion"              %   "0.13.9",
   "info.folone"         %%  "poi-scala"               %   "0.15",
   "com.ambiata"         %%  "origami-core"            %   Origami,
-  "com.ambiata"         %%  "origami-stream"          %   Origami  exclude("com.google.caliper","caliper") exclude("com.google.guava", "guava")
+  "com.ambiata"         %%  "origami-stream"          %   Origami  exclude("com.google.caliper","caliper") exclude("com.google.guava", "guava"),
+  "net.databinder"      %%  "unfiltered-netty-server" %   "0.8.4"
 )
 
 libraryDependencies ++= Seq(
