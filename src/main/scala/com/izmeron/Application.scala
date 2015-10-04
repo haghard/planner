@@ -14,81 +14,37 @@
 
 package com.izmeron
 
-import com.izmeron.commands.{ Exit, Plan, StaticCheck, CliCommand }
-import com.izmeron.out.{ ExcelOutputModule, JsonOutputModule }
-import sbt.complete.Parser
-import sbt.complete.DefaultParsers._
-import com.typesafe.config.ConfigFactory
+import java.io.File
+import knobs.{ MutableConfig, KnobsResource }
 
-import scala.annotation.tailrec
+import scalaz.concurrent.Task
 
 object Application extends App {
+  val cfgPath = "./cfg/planner.cfg"
+  val log = org.apache.log4j.Logger.getLogger("planner")
 
-  val cfg = ConfigFactory.load()
-  val lenghtThreshold = cfg.getConfig("planner.distribution").getInt("lenghtThreshold")
-  val minLenght = cfg.getConfig("planner.distribution").getInt("minLenght")
-  val httpPort = cfg.getConfig("planner").getInt("httpPort")
-  val path = cfg.getConfig("planner").getString("indexFile")
-  val outputDir = cfg.getConfig("planner").getString("outputDir")
+  (allConfigs(List(knobs.Required(knobs.FileResource(new File(cfgPath))))) { cfg ⇒
+    for {
+      lenghtThreshold ← cfg.lookup[Int]("planner.distribution.lenghtThreshold")
+      minLenght ← cfg.lookup[Int]("planner.distribution.minLenght")
+      httpPort ← cfg.lookup[Int]("planner.httpPort")
+      index ← cfg.lookup[String]("planner.indexFile")
+    } yield (lenghtThreshold, minLenght, httpPort, index)
+  }).attemptRun.fold({ ex ⇒ println(ex.getMessage); System.exit(0) }, { cfg ⇒
+    import scalaz._, Scalaz._
+    (for {
+      th ← cfg._1 \/> "lenghtThreshold is missing in cfg"
+      minL ← cfg._2 \/> "minLenght is missing in cfg"
+      httpPort ← cfg._3 \/> "httpPort is missing in cfg"
+      index ← cfg._4 \/> "indexFile is missing in cfg"
+    } yield (th, minL, httpPort, index)).fold({ ex ⇒ println(ex); System.exit(0) }, { cfg ⇒
+      new http.Server(cfg._4, cfg._3, log, cfg._2, cfg._1, Version(0, 0, 1)).start()
+    })
+  })
 
-  val outFormatJ = "json"
-  val outFormatE = "excel"
-
-  new com.izmeron.http.PlannerServer(path, httpPort,
-    org.apache.log4j.Logger.getLogger("planner-server"),
-    minLenght, lenghtThreshold, Version(0, 1, 0)).start()
-
-  /*
-  parseLine(args.mkString(" "), cliParser).fold(runCli()) { _.start() }
-
-  private def readLine[U](parser: Parser[U], prompt: String = "> ", mask: Option[Char] = None): Option[U] = {
-    val reader = new sbt.FullReader(None, parser)
-    reader.readLine(prompt, mask) flatMap { line ⇒
-      parseLine(line, parser)
-    }
-  }
-
-  private def parseLine[U](line: String, parser: Parser[U]): Option[U] = {
-    val parsed = Parser.parse(line, parser)
-    parsed match {
-      case Right(value) ⇒ Some(value)
-      case Left(e)      ⇒ None
-    }
-  }
-
-  def runCli(): Unit = {
-    def readCommand(): Option[CliCommand] = readLine(cliParser)
-    @tailrec def loop(): Unit = {
-      val c = readCommand()
-      print(s"${Ansi.blueMessage("--RUN-- ")}")
-      c match {
-        case None ⇒
-          println(s"${Ansi.green("Unknown command: Please use [exit, check, plan]")}")
-          loop()
-        case Some(Exit) ⇒
-          println(s"${Ansi.green("exit")}")
-          System.exit(0)
-        case Some(cmd) ⇒ {
-          println(s"${Ansi.green(cmd.getClass.getName)}")
-          cmd.start()
-          loop()
-        }
-      }
-    }
-    loop()
-  }
-
-  def cliParser: Parser[CliCommand] = {
-    val pathLineParser = any.* map (_.mkString(""))
-    val exit = token("exit" ^^^ Exit)
-    val check = (token("check" ~ Space) ~> pathLineParser).map(args ⇒ StaticCheck(args, minLenght, lenghtThreshold))
-    val plan = (token("plan" ~ Space) ~> pathLineParser ~ (token("--out" ~ Space) ~> (outFormatJ | outFormatE))).map { args ⇒
-      val path = args._1.trim
-      val format = args._2.trim
-      if (format == outFormatJ) Plan[JsonOutputModule](path, outputDir, format, minLenght, lenghtThreshold)
-      else Plan[ExcelOutputModule](path, outputDir, format, minLenght, lenghtThreshold)
-    }
-
-    exit | plan | check
-  }*/
+  def allConfigs[A](files: List[KnobsResource])(t: MutableConfig ⇒ Task[A]): Task[A] =
+    for {
+      mb ← knobs.load(files)
+      r ← t(mb)
+    } yield r
 }

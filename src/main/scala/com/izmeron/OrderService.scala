@@ -74,11 +74,11 @@ object OrderService {
        * |csv_line2 |---|distribute |--+                                 +------------+   +------------+
        * +----------+   +-----------+
        */
-      val graph =  for {
-        bv <- req.body.map(_.toBitVector)
-        lines <- decodeUtf decode bv
+      val graph = for {
+        bv ← req.body.map(_.toBitVector)
+        lines ← decodeUtf decode bv
         linesSrc = rowsR[Order](new java.io.ByteArrayInputStream(lines.getBytes(StandardCharsets.UTF_8)), sep)
-        out <- (aggregator.sourceToQueue(linesSrc.map(aggregator.distribute(_, index)), queue).drain merge merge.mergeN(parallelism)(aggregator.cuttingStock(queue)))
+        out ← (aggregator.sourceToQueue(linesSrc.map(aggregator.distribute(_, index)), queue).drain merge merge.mergeN(parallelism)(aggregator.cuttingStock(queue)))
           .map { list ⇒ s"${writer.monoidMapper(lenghtThreshold, list).prettyPrint}\n" }
           .onFailure { th ⇒ P.emit(s"{ Error: ${th.getClass.getName}: ${th.getMessage}}") }
       } yield out

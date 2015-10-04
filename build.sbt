@@ -54,12 +54,13 @@ resolvers ++= Seq(
   "Local Maven Repository" at "file:///" + localMvnRepo,
   "maven central"          at "http://repo.maven.apache.org/maven2",
   "Scalaz"                 at "http://dl.bintray.com/scalaz/releases",
-  "jboss repo"             at "http://repository.jboss.org/nexus/content/groups/public-jboss/"
+  "jboss repo"             at "http://repository.jboss.org/nexus/content/groups/public-jboss/",
+  "oncue.bintray"          at "http://dl.bintray.com/oncue/releases"
 )
 
 libraryDependencies ++= Seq(
   "log4j"               %   "log4j"                   %   "1.2.14",
-  "com.typesafe"        %   "config"                  %   "1.3.0",
+  "oncue.knobs"         %%  "core"                    %   "3.3.3",
   "io.spray"            %%  "spray-json"              %   "1.3.2",
   "com.nrinaudo"        %%  "scalaz-stream-csv"       %   "0.1.3",
   "org.scala-sbt"       %   "completion"              %   "0.13.9",

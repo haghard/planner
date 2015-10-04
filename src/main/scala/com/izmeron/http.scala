@@ -33,10 +33,10 @@ object http {
   val httpExec = Executors.newFixedThreadPool(Runtime.getRuntime.availableProcessors(),
     new NamedThreadFactory("http-worker"))
 
-  class PlannerServer(val path0: String, httpPort0: Int, val log0: org.apache.log4j.Logger,
-                      val minLenght0: Int, val lenghtThreshold0: Int, val v: Version) {
+  class Server(val indexPath: String, httpPort0: Int, val log0: org.apache.log4j.Logger,
+               val minLenght0: Int, val lenghtThreshold0: Int, val v: Version) {
     private val aggregator = new OrigamiAggregator with ScalazFlowSupport {
-      override val path = path0
+      override val path = indexPath
       override val minLenght = minLenght0
       override val log = log0
       override val lenghtThreshold = lenghtThreshold0
@@ -46,7 +46,7 @@ object http {
       log0.debug("★ ★ ★ ★ ★ ★  Index creation has been started  ★ ★ ★ ★ ★ ★")
       aggregator.createIndex.runAsync {
         case \/-((\/-(index), None)) ⇒
-          log0.info("★ ★ ★  Index has been created  ★ ★ ★ ★ ★ ★")
+          log0.info(s"Server has been started with IndexPath:$indexPath  MinLenght: $minLenght0 LenghtThreshold:$lenghtThreshold0 version: $v")
           BlazeBuilder.bindHttp(httpPort0, "127.0.0.1")
             .mountService(OrderService(aggregator, index, lenghtThreshold0, log0), "/")
             .withServiceExecutor(httpExec)
