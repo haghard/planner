@@ -35,7 +35,6 @@ object OrderService {
   implicit val CpuIntensive = scalaz.concurrent.Strategy.Executor(PlannerEx)
   implicit val Codec: scala.io.Codec = scala.io.Codec.UTF8
 
-
   private val sep = ';'
   private var lenghtThreshold = 0
   private var logger: org.apache.log4j.Logger = _

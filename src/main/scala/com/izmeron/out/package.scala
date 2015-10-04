@@ -15,7 +15,6 @@
 package com.izmeron
 
 package object out {
-
   import scalaz.effect.IO
   import java.io.{ PrintWriter, File }
   import scala.annotation.implicitNotFound
@@ -47,7 +46,7 @@ package object out {
   object OutputWriter {
     import spray.json.{ JsArray, JsNumber, JsString, _ }
 
-    def apply[T <: OutputModule](implicit writer: OutputWriter[T]): OutputWriter[T] = writer
+    def apply[T <: OutputModule : OutputWriter]: OutputWriter[T] = implicitly[OutputWriter[T]]
 
     implicit val json = new OutputWriter[JsonOutputModule] {
       private val enc = "UTF-8"
