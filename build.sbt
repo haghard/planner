@@ -1,6 +1,7 @@
 import com.typesafe.sbt.SbtScalariform.ScalariformKeys
 import scalariform.formatter.preferences._
 import bintray.Keys._
+import NativePackagerKeys._
 
 organization := "com.izmeron"
 
@@ -52,13 +53,14 @@ resolvers ++= Seq(
   "Local Maven Repository" at "file:///" + localMvnRepo,
   "maven central"          at "http://repo.maven.apache.org/maven2",
   "Scalaz"                 at "http://dl.bintray.com/scalaz/releases",
-  "jboss repo"             at "http://repository.jboss.org/nexus/content/groups/public-jboss/"
+  "jboss repo"             at "http://repository.jboss.org/nexus/content/groups/public-jboss/",
+  "oncue.bintray"          at "http://dl.bintray.com/oncue/releases"
 )
 
+//https://dl.bintray.com/oncue/releases/oncue/knobs/core_2.11/3.3.3/
 libraryDependencies ++= Seq(
   "log4j"               %   "log4j"                   %   "1.2.14",
-  "com.typesafe"        %   "config"                  %   "1.3.0",
-  "net.databinder"      %%  "unfiltered-netty-server" %   "0.8.4",
+  "oncue.knobs"         %%  "core"                    %   "3.3.3",
   "io.spray"            %%  "spray-json"              %   "1.3.2",
   "com.nrinaudo"        %%  "scalaz-stream-csv"       %   "0.1.3",
   "org.scala-sbt"       %   "completion"              %   "0.13.9",

@@ -14,7 +14,6 @@
 
 package com.izmeron
 
-import com.izmeron.http.AsyncContext
 import com.izmeron.out.{OutputWriter, OutputModule}
 
 import scalaz.concurrent.Task
@@ -78,7 +77,7 @@ package object commands {
 
   final class Plan[T <: OutputModule](override val path: String, outputDir: String, outFormat: String, override val minLenght: Int,
                       override val lenghtThreshold: Int, writer: OutputWriter[T]) extends CliCommand with OrigamiAggregator
-  with ScalazFlowSupport with AsyncContext {
+  with ScalazFlowSupport {
     import scalaz.stream.merge
     import scalaz.stream.async
 
@@ -86,7 +85,6 @@ package object commands {
     implicit val CpuIntensive = scalaz.concurrent.Strategy.Executor(PlannerEx)
 
     override val log = org.apache.log4j.Logger.getLogger("planner")
-    private val queue = async.boundedQueue[List[Result]](parallelism * parallelism)
 
     /**
      * Computation graph
@@ -109,6 +107,7 @@ package object commands {
           println(Ansi.green("Index has been created"))
           log.debug("Index has been created")
           Task.fork {
+            val queue = async.boundedQueue[List[Result]](parallelism * parallelism)
             (inputReader(orderReader map (distribute(_, index)), queue).drain merge merge.mergeN(parallelism)(cuttingStock(queue)))
               .foldMap(writer.monoidMapper(lenghtThreshold, _))(writer.monoid)
               .runLast

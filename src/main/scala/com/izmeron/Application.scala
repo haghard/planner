@@ -14,38 +14,39 @@
 
 package com.izmeron
 
-import com.izmeron.commands.{ Exit, Plan, StaticCheck, CliCommand }
-import com.izmeron.out.{ ExcelOutputModule, JsonOutputModule }
+import java.io.File
+
+import knobs._
 import sbt.complete.Parser
 import sbt.complete.DefaultParsers._
-import com.typesafe.config.ConfigFactory
+import com.izmeron.out.{ ExcelOutputModule, JsonOutputModule }
+import com.izmeron.commands.{ Exit, Plan, StaticCheck, CliCommand }
 
 import scala.annotation.tailrec
+import scalaz.concurrent.Task
 
 object Application extends App {
-
-  val cfg = ConfigFactory.load()
-  val lenghtThreshold = cfg.getConfig("planner.distribution").getInt("lenghtThreshold")
-  val minLenght = cfg.getConfig("planner.distribution").getInt("minLenght")
-  val httpPort = cfg.getConfig("planner").getInt("httpPort")
-  val path = cfg.getConfig("planner").getString("indexFile")
-  val outputDir = cfg.getConfig("planner").getString("outputDir")
-
   val outFormatJ = "json"
   val outFormatE = "excel"
+  val cfgPath = "./cfg/planner.cfg"
 
-  /*
-  val server = new com.izmeron.http.PlannerServer(path, httpPort,
-    org.apache.log4j.Logger.getLogger("planner-server"),
-    minLenght, lenghtThreshold, coefficient, Version(0, 1, 0)) with Planner
-  server.start()
-
-  Runtime.getRuntime.addShutdownHook(new Thread(new Runnable {
-    def run() = server.shutdown()
-  }))
-  */
-
-  parseLine(args.mkString(" "), cliParser).fold(runCli()) { _.start() }
+  (allConfigs(List(knobs.Required(knobs.FileResource(new File(cfgPath))))) { cfg ⇒
+    for {
+      lenghtThreshold ← cfg.lookup[Int]("planner.distribution.lenghtThreshold")
+      minLenght ← cfg.lookup[Int]("planner.distribution.minLenght")
+      outDir ← cfg.lookup[String]("planner.outputDir")
+    } yield (lenghtThreshold, minLenght, outDir)
+  }).attemptRun.fold({ ex ⇒ println(Ansi.red(ex.getMessage)); System.exit(0) }, { cfg ⇒
+    import scalaz._, Scalaz._
+    (for {
+      th ← cfg._1 \/> "lenghtThreshold is missing in cfg"
+      minL ← cfg._2 \/> "minLenght is missing in cfg"
+      outDir ← cfg._3 \/> "outputDir is missing in cfg"
+    } yield (th, minL, outDir)).fold({ ex ⇒ println(Ansi.red(ex)); System.exit(0) }, { cfg ⇒
+      println(Ansi.green(s"Planner has been started with lenghtThreshold:${cfg._1} minLenght:${cfg._2} outputDir:${cfg._3}"))
+      parseLine(args.mkString(" "), cliParser(cfg._1, cfg._2, cfg._3)).fold(runCli(cfg._1, cfg._2, cfg._3)) { _.start() }
+    })
+  })
 
   private def readLine[U](parser: Parser[U], prompt: String = "> ", mask: Option[Char] = None): Option[U] = {
     val reader = new sbt.FullReader(None, parser)
@@ -62,8 +63,8 @@ object Application extends App {
     }
   }
 
-  def runCli(): Unit = {
-    def readCommand(): Option[CliCommand] = readLine(cliParser)
+  def runCli(lenghtThreshold: Int, minLenght: Int, outputDir: String): Unit = {
+    def readCommand(): Option[CliCommand] = readLine(cliParser(lenghtThreshold, minLenght, outputDir))
     @tailrec def loop(): Unit = {
       val c = readCommand()
       print(s"${Ansi.blueMessage("--RUN-- ")}")
@@ -84,7 +85,7 @@ object Application extends App {
     loop()
   }
 
-  def cliParser: Parser[CliCommand] = {
+  def cliParser(lenghtThreshold: Int, minLenght: Int, outputDir: String): Parser[CliCommand] = {
     val pathLineParser = any.* map (_.mkString(""))
     val exit = token("exit" ^^^ Exit)
     val check = (token("check" ~ Space) ~> pathLineParser).map(args ⇒ StaticCheck(args, minLenght, lenghtThreshold))
@@ -94,7 +95,12 @@ object Application extends App {
       if (format == outFormatJ) Plan[JsonOutputModule](path, outputDir, format, minLenght, lenghtThreshold)
       else Plan[ExcelOutputModule](path, outputDir, format, minLenght, lenghtThreshold)
     }
-
     exit | plan | check
   }
+
+  def allConfigs[A](files: List[KnobsResource])(t: MutableConfig ⇒ Task[A]): Task[A] =
+    for {
+      mb ← load(files)
+      r ← t(mb)
+    } yield r
 }
