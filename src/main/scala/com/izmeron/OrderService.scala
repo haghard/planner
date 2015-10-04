@@ -45,8 +45,7 @@ object OrderService {
 
   def apply(aggregator: OrigamiAggregator with ScalazFlowSupport,
             index: mutable.Map[String, RawResult],
-            lenghtThreshold: Int,
-            log: org.apache.log4j.Logger): HttpService = {
+            lenghtThreshold: Int, log: org.apache.log4j.Logger): HttpService = {
     this.aggregator = aggregator
     this.index = index
     this.lenghtThreshold = lenghtThreshold
@@ -59,13 +58,14 @@ object OrderService {
   private val service = HttpService {
     case req @ POST -> Root / "orders" ⇒
       val queue = async.boundedQueue[List[Result]](parallelism * parallelism)
-      val flow = req.body.map(_.toBitVector).flatMap(bv ⇒ decodeUtf decode bv)
-        .flatMap { lines ⇒
-          val src = rowsR[Order](new java.io.ByteArrayInputStream(lines.getBytes(StandardCharsets.UTF_8)), sep).map(aggregator.lookupFromIndex(_, index))
-          (aggregator.inputReader(src, queue).drain merge merge.mergeN(parallelism)(aggregator.cuttingWorkers(queue)))
-            .map { list ⇒ s"${writer.monoidMapper(lenghtThreshold, list).prettyPrint}\n" }
-            .onFailure { th ⇒ P.emit(s"{ Error: ${th.getClass.getName} ${th.getMessage}}") }
-        }
+      val flow =  for {
+        bv <- req.body.map(_.toBitVector)
+        lines <- decodeUtf decode bv
+        src = rowsR[Order](new java.io.ByteArrayInputStream(lines.getBytes(StandardCharsets.UTF_8)), sep).map(aggregator.lookupFromIndex(_, index))
+        out <- (aggregator.inputReader(src, queue).drain merge merge.mergeN(parallelism)(aggregator.cuttingWorkers(queue)))
+          .map { list ⇒ s"${writer.monoidMapper(lenghtThreshold, list).prettyPrint}\n" }
+          .onFailure { th ⇒ P.emit(s"{ Error: ${th.getClass.getName}: ${th.getMessage}}") }
+      } yield out
       Ok(flow).chunked
   }
 
