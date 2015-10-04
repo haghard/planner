@@ -139,7 +139,7 @@ object netty {
             })
 
           //echo '90300.01.061;Корпус;Сталь 40Х ф140_1225490000;Сталь 40Х;140;820;56;2;1;410;1;2;0;2' | curl -d @- http://127.0.0.1:9001/orders
-          //http POST http://127.0.0.1:9001/orders < ./cvs/metal2pipes2.csv
+          //http POST http://127.0.0.1:9001/orders < ./csv/metal2pipes2.csv
           case POST(Path("/orders")) ⇒
             forkTask {
               val queue = async.boundedQueue[List[Result]](parallelism * parallelism)
