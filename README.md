@@ -5,6 +5,7 @@ Planner
 Computation graph
 ===================
 
+```scala
      
 File           Parallel stage                                         Parallel stage
 +----------+   +-----------+                                          +------------+
@@ -17,6 +18,8 @@ File           Parallel stage                                         Parallel s
 +----------+   +-----------+  |                                  +----|cuttingStock|----+
 |csv_line2 |---|distribute |--+                                       +------------+
 +----------+   +-----------+
+
+```
 
 Test input
 ===================
