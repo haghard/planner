@@ -37,7 +37,6 @@ enablePlugins(JavaAppPackaging)
 
 mainClass in Compile := Some("com.izmeron.Application")
 
-val Origami = "1.0-20150902134048-8d00462"
 val localMvnRepo = "/Volumes/Data/dev_build_tools/apache-maven-3.1.1/repository"
 
 scalariformSettings
@@ -52,7 +51,6 @@ net.virtualvoid.sbt.graph.Plugin.graphSettings
 resolvers ++= Seq(
   "Local Maven Repository" at "file:///" + localMvnRepo,
   "maven central"          at "http://repo.maven.apache.org/maven2",
-  "Scalaz"                 at "http://dl.bintray.com/scalaz/releases",
   "jboss repo"             at "http://repository.jboss.org/nexus/content/groups/public-jboss/"
 )
 
