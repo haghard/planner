@@ -19,13 +19,13 @@ import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.HttpEntity.ChunkStreamPart
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.server.Directives._
-import akka.stream.{ Supervision, ActorAttributes, ActorMaterializer }
+import akka.stream.ActorMaterializer
 import akka.stream.actor.ActorSubscriberMessage.{ OnError, OnComplete, OnNext }
 import akka.stream.actor._
 import akka.stream.io.Framing
 import akka.stream.scaladsl._
 import akka.util.ByteString
-import com.izmeron.out.{ JsonOutputModule, OutputWriter, OutputModule }
+import com.izmeron.out.{ JsonOutputModule, OutputWriter }
 
 import scala.annotation.tailrec
 import scala.collection.mutable
