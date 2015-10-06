@@ -59,7 +59,8 @@ libraryDependencies ++= Seq(
   "io.spray"            %%  "spray-json"               %   "1.3.2",
   "info.folone"         %%  "poi-scala"                %   "0.15",
   "com.typesafe.akka"   %%  "akka-stream-experimental" %   akkaVersion,
-  "com.typesafe.akka"   %%  "akka-http-experimental"   %   akkaVersion,
+  "com.typesafe.akka"   %%"akka-http-core-experimental"%   akkaVersion,
+  "com.typesafe.akka"   %% "akka-http-experimental"    %   akkaVersion,
   "com.typesafe.akka"   %%  "akka-slf4j"               %   "2.4.0",
   "ch.qos.logback"      %   "logback-classic"          %   "1.1.2"
 )

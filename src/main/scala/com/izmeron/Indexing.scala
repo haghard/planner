@@ -77,7 +77,7 @@ trait Indexing {
     Order(items(0), items(13).toInt)
   }
 
-  private def createFileIndex: Future[mutable.Map[String, RawResult]] = {
+  def createFileIndex: Future[mutable.Map[String, RawResult]] = {
     (Source.inputStream(() ⇒ new FileInputStream(indexPath)) via Framing.delimiter(sep, Int.MaxValue, true))
       .map(parseCsv)
       .withAttributes(ActorAttributes.supervisionStrategy(_ ⇒ Supervision.Stop))
@@ -96,13 +96,6 @@ trait Indexing {
   }
 
   def indexedOrders: Future[(List[Order], mutable.Map[String, RawResult])] = (readOrders zip createFileIndex)
-
-  def innerSource(order: Order, index: mutable.Map[String, RawResult], log: akka.event.LoggingAdapter) = Source {
-    Future {
-      val raw = index(order.kd)
-      distributeWithinGroup(lenghtThreshold, minLenght, log)(groupByOptimalNumber(order, lenghtThreshold, minLenght, log)(raw))
-    }(dispatcher)
-  }
 
   def maxLengthCheck: Future[Int] =
     (Source.inputStream(() ⇒ new FileInputStream(indexPath)) via Framing.delimiter(sep, Int.MaxValue, true))

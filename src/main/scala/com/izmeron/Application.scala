@@ -31,8 +31,7 @@ object Application extends App with com.izmeron.Indexing {
   override val httpPort = plannerCfg.getInt("httpPort")
 
   (maxLengthCheck zip multiplicity).flatMap {
-    case (max, errors) ⇒
-      http.Server(httpPort)
+    case (max, errors) ⇒ createFileIndex.map(http.Server(httpPort, lenghtThreshold, minLenght, _, dispatcher))
   }.onComplete {
     case Success(r) ⇒
       system.log.info(s"Params IndexPath:$indexPath  MinLenght:$minLenght LenghtThreshold:$lenghtThreshold")
