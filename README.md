@@ -1,12 +1,11 @@
 Planner
 ===================
 
-
 Computation graph
 ===================
 
-```scala
-     
+scala ```
+
 File           Parallel stage                                         Parallel stage
 +----------+   +-----------+                                          +------------+
 |csv_line0 |---|distribute |--+                                  +----|cuttingStock|----+
@@ -19,4 +18,17 @@ File           Parallel stage                                         Parallel s
 |csv_line2 |---|distribute |--+                                       +------------+
 +----------+   +-----------+
 
+```
+
+
+Commands
+======================
+
+scala ```
+
+check  ./csv/metal2pipes2.csv
+
+plan  ./csv/metal2pipes2.csv --out json
+
+plan  ./csv/metal2pipes2.csv --out excel
 ```
