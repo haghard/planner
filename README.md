@@ -4,7 +4,7 @@ Planner
 Computation graph
 ===================
 
-scala ```
+```scala
 
 File           Parallel stage                                         Parallel stage
 +----------+   +-----------+                                          +------------+
@@ -24,7 +24,7 @@ File           Parallel stage                                         Parallel s
 Commands
 ======================
 
-scala ```
+```scala
 
 check  ./csv/metal2pipes2.csv
 
