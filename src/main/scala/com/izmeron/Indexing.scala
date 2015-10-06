@@ -15,11 +15,12 @@
 package com.izmeron
 
 import java.io.FileInputStream
-import akka.actor.ActorSystem
+import akka.actor.{ ActorLogging, ActorSystem }
 import akka.stream.io.Framing
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
 import akka.stream.{ ActorMaterializerSettings, ActorMaterializer, Supervision, ActorAttributes }
+import com.typesafe.config.Config
 
 import scala.collection.mutable
 import scala.concurrent.Future
@@ -27,18 +28,20 @@ import scala.concurrent.Future
 trait Indexing {
   import akka.stream.io.Implicits._
 
-  implicit val system: ActorSystem = ActorSystem("Sys", Application.cfg)
-  val Settings = ActorMaterializerSettings(system)
-    .withInputBuffer(initialSize = 64, maxSize = 64)
-    .withDispatcher("akka.planner")
-
-  implicit val materializer = ActorMaterializer(Settings)
-  implicit val dispatcher = system.dispatchers.lookup("akka.planner")
-
   def minLenght: Int
   def indexPath: String
   def lenghtThreshold: Int
-  def log: org.apache.log4j.Logger
+  def httpPort: Int
+  def cfg: Config
+
+  implicit lazy val system: ActorSystem = ActorSystem("Sys", cfg)
+
+  lazy val Settings = ActorMaterializerSettings(system)
+    .withInputBuffer(initialSize = 64, maxSize = 64)
+    .withDispatcher("akka.planner")
+
+  implicit lazy val materializer = ActorMaterializer(Settings)
+  implicit lazy val dispatcher = system.dispatchers.lookup("akka.planner")
 
   def parseCsv(bs: ByteString): Etalon = {
     val items = bs.utf8String.split(';')
@@ -94,7 +97,7 @@ trait Indexing {
 
   def indexedOrders: Future[(List[Order], mutable.Map[String, RawResult])] = (readOrders zip createFileIndex)
 
-  def innerSource(order: Order, index: mutable.Map[String, RawResult]) = Source {
+  def innerSource(order: Order, index: mutable.Map[String, RawResult], log: akka.event.LoggingAdapter) = Source {
     Future {
       val raw = index(order.kd)
       distributeWithinGroup(lenghtThreshold, minLenght, log)(groupByOptimalNumber(order, lenghtThreshold, minLenght, log)(raw))

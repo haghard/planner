@@ -12,6 +12,8 @@
  * limitations under the License.
  */
 
+/*
+
 package com.izmeron
 
 import akka.actor.Props
@@ -146,4 +148,4 @@ package object commands {
         context.system.stop(self)
     }
   }
-}
+}*/

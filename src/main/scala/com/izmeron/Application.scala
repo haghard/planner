@@ -13,79 +13,33 @@
  */
 
 package com.izmeron
-
 import java.io.File
 
 import com.typesafe.config.ConfigFactory
-import sbt.complete.Parser
-import sbt.complete.DefaultParsers._
-import com.izmeron.out.{ ExcelOutputModule, JsonOutputModule }
-import com.izmeron.commands.{ Exit, Plan, StaticCheck, CliCommand }
 
-import scala.annotation.tailrec
+import scala.util.{ Failure, Success }
 
-object Application extends App {
-  val outFormatJ = "json"
-  val outFormatE = "excel"
+object Application extends App with com.izmeron.Indexing {
   val cfgPath = "./cfg/planner.conf"
 
-  val cfg = ConfigFactory.parseFile(new File(cfgPath))
-
+  override val cfg = ConfigFactory.parseFile(new File(cfgPath))
   val plannerCfg = cfg.getConfig("akka.settings")
-  val lenghtThreshold = plannerCfg.getInt("distribution.lenghtThreshold")
-  val minLenght = plannerCfg.getInt("distribution.minLenght")
-  val outputDir = plannerCfg.getString("outputDir")
 
-  println(Ansi.green(s"Planner has been started with lenghtThreshold:$lenghtThreshold minLenght:$minLenght outputDir:$outputDir"))
-  parseLine(args.mkString(" "), cliParser(lenghtThreshold, minLenght, outputDir)).fold(runCli(lenghtThreshold, minLenght, outputDir)) { _.start() }
+  override val lenghtThreshold = plannerCfg.getInt("distribution.lenghtThreshold")
+  override val minLenght = plannerCfg.getInt("distribution.minLenght")
+  override val indexPath = plannerCfg.getString("indexPath")
+  override val httpPort = plannerCfg.getInt("httpPort")
 
-  private def readLine[U](parser: Parser[U], prompt: String = "> ", mask: Option[Char] = None): Option[U] = {
-    val reader = new sbt.FullReader(None, parser)
-    reader.readLine(prompt, mask) flatMap { line ⇒
-      parseLine(line, parser)
-    }
-  }
-
-  private def parseLine[U](line: String, parser: Parser[U]): Option[U] = {
-    val parsed = Parser.parse(line, parser)
-    parsed match {
-      case Right(value) ⇒ Some(value)
-      case Left(e)      ⇒ None
-    }
-  }
-
-  def runCli(lenghtThreshold: Int, minLenght: Int, outputDir: String): Unit = {
-    def readCommand(): Option[CliCommand] = readLine(cliParser(lenghtThreshold, minLenght, outputDir))
-    @tailrec def loop(): Unit = {
-      val c = readCommand()
-      print(s"${Ansi.blueMessage("--RUN-- ")}")
-      c match {
-        case None ⇒
-          println(s"${Ansi.green("Unknown command: Please use commands [exit, check, plan]")}")
-          loop()
-        case Some(Exit) ⇒
-          println(s"${Ansi.green("exit")}")
-          System.exit(0)
-        case Some(cmd) ⇒ {
-          println(s"${Ansi.green(cmd.getClass.getSimpleName)}")
-          cmd.start()
-          loop()
-        }
-      }
-    }
-    loop()
-  }
-
-  def cliParser(lenghtThreshold: Int, minLenght: Int, outputDir: String): Parser[CliCommand] = {
-    val pathLineParser = any.* map (_.mkString(""))
-    val exit = token("exit" ^^^ Exit)
-    val check = (token("check" ~ Space) ~> pathLineParser).map(args ⇒ StaticCheck(args, minLenght, lenghtThreshold))
-    val plan = (token("plan" ~ Space) ~> pathLineParser ~ (token("--out" ~ Space) ~> (outFormatJ | outFormatE))).map { args ⇒
-      val path = args._1.trim
-      val format = args._2.trim
-      if (format == outFormatJ) Plan[JsonOutputModule](path, outputDir, format, minLenght, lenghtThreshold)
-      else Plan[ExcelOutputModule](path, outputDir, format, minLenght, lenghtThreshold)
-    }
-    exit | plan | check
+  (maxLengthCheck zip multiplicity).flatMap {
+    case (max, errors) ⇒
+      http.Server(httpPort)
+  }.onComplete {
+    case Success(r) ⇒
+      system.log.info(s"Params IndexPath:$indexPath  MinLenght:$minLenght LenghtThreshold:$lenghtThreshold")
+      system.log.info(s"★ ★ ★ ★ ★ ★  Http server has been started on 127.0.0.1:$httpPort ★ ★ ★ ★ ★ ★")
+    case Failure(ex) ⇒
+      system.log.info(s"★ ★ ★ ★ ★ ★ Couldn't run the server cause: ${ex.getMessage} ★ ★ ★ ★ ★ ★")
+      system.terminate()
+      System.exit(0)
   }
 }
