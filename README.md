@@ -3,7 +3,6 @@ Planner
 
 Computation graph
 ===================
-
 scala ```
 
 File           Parallel stage                                         Parallel stage
@@ -23,7 +22,6 @@ File           Parallel stage                                         Parallel s
 
 Commands
 ======================
-
 scala ```
 
 check  ./csv/metal2pipes2.csv
