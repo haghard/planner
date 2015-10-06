@@ -9,7 +9,7 @@ name := "planner"
 
 version := "0.0.2-snapshot"
 
-scalaVersion := "2.11.6"
+scalaVersion := "2.11.7"
 
 parallelExecution := false
 parallelExecution in Test := false
@@ -53,20 +53,17 @@ resolvers ++= Seq(
   "Local Maven Repository" at "file:///" + localMvnRepo,
   "maven central"          at "http://repo.maven.apache.org/maven2",
   "Scalaz"                 at "http://dl.bintray.com/scalaz/releases",
-  "jboss repo"             at "http://repository.jboss.org/nexus/content/groups/public-jboss/",
-  "oncue.bintray"          at "http://dl.bintray.com/oncue/releases"
+  "jboss repo"             at "http://repository.jboss.org/nexus/content/groups/public-jboss/"
 )
 
-//https://dl.bintray.com/oncue/releases/oncue/knobs/core_2.11/3.3.3/
 libraryDependencies ++= Seq(
   "log4j"               %   "log4j"                   %   "1.2.14",
-  "oncue.knobs"         %%  "core"                    %   "3.3.3",
   "io.spray"            %%  "spray-json"              %   "1.3.2",
-  "com.nrinaudo"        %%  "scalaz-stream-csv"       %   "0.1.3",
   "org.scala-sbt"       %   "completion"              %   "0.13.9",
   "info.folone"         %%  "poi-scala"               %   "0.15",
-  "com.ambiata"         %%  "origami-core"            %   Origami,
-  "com.ambiata"         %%  "origami-stream"          %   Origami  exclude("com.google.caliper","caliper") exclude("com.google.guava", "guava")
+  "com.typesafe.akka"   %%  "akka-stream-experimental"%   "1.0",
+  "com.typesafe.akka"   %%  "akka-slf4j"               %   "2.4.0",
+  "ch.qos.logback"      %   "logback-classic"          %   "1.1.2"
 )
 
 libraryDependencies ++= Seq(

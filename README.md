@@ -20,3 +20,15 @@ File           Parallel stage                                         Parallel s
 +----------+   +-----------+
 
 ```
+
+Commands
+=====================
+
+```scala
+
+check  ./csv/metal2pipes2.csv
+
+plan  ./csv/metal2pipes2.csv --out json
+
+plan  ./csv/metal2pipes2.csv --out excel
+```

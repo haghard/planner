@@ -17,14 +17,9 @@ package com
 import scala.util.Try
 import scalaz.\/
 import scala.annotation.tailrec
-import java.util.concurrent.Executors._
 
 package object izmeron {
   import scala.collection.mutable
-  import com.ambiata.origami.FoldM
-  import com.ambiata.origami._, Origami._
-  import com.nrinaudo.csv.RowReader
-  import org.apache.log4j.Logger
   import java.util.concurrent.ThreadFactory
   import java.util.concurrent.atomic.AtomicInteger
 
@@ -36,20 +31,8 @@ package object izmeron {
 
   val parallelism = Runtime.getRuntime.availableProcessors()
 
-  val PlannerEx = newFixedThreadPool(parallelism, new NamedThreadFactory("planner"))
-
   case class Order(kd: String, quantity: Int)
   case class Version(major: Int, minor: Int, bf: Int)
-
-  implicit val rowReaderOrder = RowReader(rec ⇒ Order(rec(0), rec(13).toInt))
-
-  case class RawCsvLine(kd: String, name: String, nameMat: String, marka: String,
-                        diam: String, len: String, indiam: String, numOptim: String,
-                        numMin: String, lenMin: String, numSect: String, numPart: String, techComp: String)
-
-  implicit val rowReader = RowReader(rec ⇒ RawCsvLine(rec(0), rec(1), rec(2), rec(3), rec(4), rec(5), rec(6),
-    rec(7), rec(8), rec(9), rec(10), rec(11), rec(12)))
-
   case class Etalon(kd: String, name: String, nameMat: String, marka: String, diam: Int, len: Int, indiam: Int, qOptimal: Int, qMin: Int,
                     lenMin: Int, numSect: Int, numPart: Int, tProfit: Int)
 
@@ -75,30 +58,9 @@ package object izmeron {
       s"$namePrefix-${threadNumber.getAndIncrement()}", 0L)
   }
 
-  def Log4jSink: SinkM[scalaz.Id.Id, Etalon] = new FoldM[scalaz.Id.Id, Etalon, Unit] {
-    private val name = "origami-fold-logger"
-    override type S = org.apache.log4j.Logger
-
-    override def fold = (state: S, elem: Etalon) ⇒ {
-      state.debug(elem)
-      state
-    }
-
-    override val start: scalaz.Id.Id[Logger] =
-      Logger.getLogger(name)
-
-    override def end(s: S): scalaz.Id.Id[Unit] =
-      s.debug(s"$name is being completed")
-  }
-
   case class StockUnit(id: Int, kdKey: String, group: String, length: Int)
   case class Provision(kdKey: String = "", length: Int = 0, stocks: List[Int] = Nil)
 
-  /**
-   *
-   *
-   *
-   */
   private[izmeron] def cuttingStockProblem(group: List[Result], threshold: Int, minLenght: Int,
                                            log: org.apache.log4j.Logger): List[Combination] = {
     def unit(r: Result, ind: Int): StockUnit =
@@ -290,7 +252,7 @@ package object izmeron {
     }.map((_, blocks0, quantities0))
   }
 
-  private[izmeron] def groupByOptimalNumber(ord: Order, threshold: Int, minLenght: Int, log: org.apache.log4j.Logger)(rr: RawResult): List[Result] = {
+  private[izmeron] def groupByOptimalNumber(ord: Order, threshold: Int, minLenght: Int, log: org.apache.log4j.Logger)(raw: RawResult): List[Result] = {
     var buffer: List[Result] = Nil
     val map = mutable.Map[Long, List[Result]]().withDefaultValue(Nil)
     var quantity = 0
@@ -299,9 +261,9 @@ package object izmeron {
     //group by
     while (quantity < ord.quantity) {
       quantity += 1
-      buffer = Result(rr.kd, rr.groupKey, rr.minLenght, rr.minLenght, 1, rr.qOptimal,
-        rr.multiplicity, rr.minQuantity, rr.techProfit) :: buffer
-      if (quantity % rr.qOptimal == 0) {
+      buffer = Result(raw.kd, raw.groupKey, raw.minLenght, raw.minLenght, 1, raw.qOptimal,
+        raw.multiplicity, raw.minQuantity, raw.techProfit) :: buffer
+      if (quantity % raw.qOptimal == 0) {
         position += 1
         map += (position -> buffer)
         buffer = Nil
@@ -321,7 +283,7 @@ package object izmeron {
       }
     }).toList
 
-    log.debug(s"1 - ${rr.kd} - ${rr.groupKey} groupByOptimalNumber: $result")
+    log.debug(s"1 - ${raw.kd} - ${raw.groupKey} groupByOptimalNumber: $result")
     result
   }
 

@@ -14,10 +14,11 @@
 
 package com.izmeron
 
+import akka.actor.Props
+import akka.stream.actor.ActorSubscriberMessage.{OnComplete, OnNext}
+import akka.stream.actor.{OneByOneRequestStrategy, ActorSubscriber}
+import akka.stream.scaladsl._
 import com.izmeron.out.{OutputWriter, OutputModule}
-
-import scalaz.concurrent.Task
-import scalaz.{ -\/, \/- }
 
 package object commands {
 
@@ -43,29 +44,22 @@ package object commands {
       new StaticCheck(path, minLenght, lenghtThreshold)
   }
 
-  final class StaticCheck(override val path: String, override val minLenght: Int,
-                          override val lenghtThreshold: Int) extends CliCommand with OrigamiAggregator {
-    import StaticCheck._
+  final class StaticCheck(override val indexPath: String, override val minLenght: Int,
+                          override val lenghtThreshold: Int) extends CliCommand with Indexing  {
     override val log = org.apache.log4j.Logger.getLogger("static-check")
-
+    import StaticCheck._
     override def start() = {
-      maxLengthCheck.attemptRun.fold({ th: Throwable ⇒ println(s"${Ansi.errorMessage(th.getMessage)}") }, {
-        case ((\/-(elem), None)) ⇒
-          elem.fold(println(s"${Ansi.errorMessage("Can't perform check")}")) { maxLenElem ⇒
-            if (lenghtThreshold < maxLenElem.len) println(s"${Ansi.blueMessage(rule0)}: ${Ansi.errorMessage(s"Config value $lenghtThreshold but $maxLenElem has been found")}")
-            else println(s"${Ansi.blueMessage(rule0)}: ${Ansi.blueMessage(ok)}")
-          }
-        case ((-\/(ex)), None) ⇒ println(s"${Ansi.blueMessage(rule0)}: ${Ansi.errorMessage(ex.getMessage)}")
-        case other             ⇒ println(s"${Ansi.blueMessage(rule0)}: ${Ansi.errorMessage(other.toString())}")
-      })
+      (maxLengthCheck zip multiplicity).map { case (max, error) =>
+        if (lenghtThreshold < max) println(s"${Ansi.blueMessage(rule0)}: ${Ansi.errorMessage(s"Config value $lenghtThreshold but $max has been found")}")
+        else println(s"${Ansi.blueMessage(rule0)}: ${Ansi.blueMessage(ok)}")
 
-      multiplicityCheck.attemptRun.fold({ th: Throwable ⇒ println(s"${Ansi.errorMessage(th.getMessage)}") }, {
-        case ((\/-(list), None)) ⇒
-          if (list.isEmpty) println(s"${Ansi.blueMessage(rule1)}: ${Ansi.blueMessage(ok)}")
-          else println(s"${Ansi.blueMessage(rule1)}: ${Ansi.green(list.size.toString)}: ${Ansi.errorMessage(list.mkString(separator))}")
-        case ((-\/(ex)), None) ⇒ println(s"${Ansi.blueMessage(rule1)}: ${Ansi.errorMessage(ex.getMessage)}")
-        case other             ⇒ println(s"${Ansi.blueMessage(rule1)}: ${Ansi.errorMessage(other.toString())}")
-      })
+        if (error.isEmpty) println(s"${Ansi.blueMessage(rule1)}: ${Ansi.blueMessage(ok)}")
+        else println(s"${Ansi.blueMessage(rule1)}: ${Ansi.green(error.size.toString)}: ${Ansi.errorMessage(error.mkString(separator))}")
+      }.onFailure {
+        case e: Throwable =>
+          log.error(s"Check rules error ${Ansi.errorMessage(e.getMessage())}")
+          println(s"${Ansi.blueMessage("Check rules error")}: ${Ansi.errorMessage(e.getMessage())}")
+      }
     }
   }
 
@@ -75,62 +69,77 @@ package object commands {
       new Plan[T](path, outputDir, outFormat, minLenght, lenghtThreshold, writer)
   }
 
-  final class Plan[T <: OutputModule](override val path: String, outputDir: String, outFormat: String, override val minLenght: Int,
-                      override val lenghtThreshold: Int, writer: OutputWriter[T]) extends CliCommand with OrigamiAggregator
-  with ScalazFlowSupport {
-    import scalaz.stream.merge
-    import scalaz.stream.async
-
-    implicit val ex = PlannerEx
-    implicit val CpuIntensive = scalaz.concurrent.Strategy.Executor(PlannerEx)
-
+  final class Plan[T <: OutputModule](override val indexPath: String, outputDir: String, outFormat: String, override val minLenght: Int,
+                      override val lenghtThreshold: Int, writer: OutputWriter[T]) extends CliCommand with Indexing {
+    import scala.concurrent.duration._
+    import scalaz.std.AllInstances._
+    val M = implicitly[scalaz.Monoid[Map[String, List[Result]]]]
+    val readIndexTime = 10 seconds
     override val log = org.apache.log4j.Logger.getLogger("planner")
-
     /**
      * Computation graph
      *
-     * File            Parallel stage                                         Parallel stage
+     * File            Parallel stage                                         Parallel Flows
      * +----------+   +-----------+                                          +------------+
      * |csv_line0 |---|distribute |--+                                  +----|cuttingStock|----+
      * +----------+   +-----------+  |  Fan-in stage                    |    +------------+    |
-     * +----------+   +-----------+  |  +----------+  +-------------+   |    +------------+    |  +------------+   +-------+
-     * |csv_line1 |---|distribute |-----|foldMonoid|--|bounded queue|--------|cuttingStock|-------|monoidMapper|---|convert|
-     * +----------+   +-----------+  |  +----------+  +-------------+   |    +------------+    |  +------------+   +-------+
+     * +----------+   +-----------+  |  +----------+  +-------------+   |    +------------+    |  +------------+
+     * |csv_line1 |---|distribute |-----|flatten   |--|mapConcat    |--------|cuttingStock|-------|Sink actor  |
+     * +----------+   +-----------+  |  +----------+  +-------------+   |    +------------+    |  +------------+
      *                               |                                  |    +------------+    |
      * +----------+   +-----------+  |                                  +----|cuttingStock|----+
      * |csv_line2 |---|distribute |--+                                       +------------+
      * +----------+   +-----------+
      */
     override def start(): Unit = {
-      createIndex.runAsync {
-        case \/-((\/-(index), None)) ⇒ {
-          println(Ansi.green("Index has been created"))
-          log.debug("Index has been created")
-          Task.fork {
-            val queue = async.boundedQueue[List[Result]](parallelism * parallelism)
-            (inputReader(orderReader map (distribute(_, index)), queue).drain merge merge.mergeN(parallelism)(cuttingStock(queue)))
-              .foldMap(writer.monoidMapper(lenghtThreshold, _))(writer.monoid)
-              .runLast
-              .map(_.fold(writer.empty)(writer.convert))
-          }.runAsync {
-            case \/-(result) ⇒
-              writer.write(result, outputDir).unsafePerformIO()
-              println(Ansi.green(s"$result"))
-            case -\/(error) ⇒
-              println(Ansi.red(s"${error.getClass.getName}: ${error.getStackTrace.mkString("\n")}: ${error.getMessage}"))
-              log.debug(s"${error.getClass.getName}: ${error.getStackTrace.mkString("\n")}: ${error.getMessage}")
+      indexedOrders.map { case (orders, index) =>
+        val mapSource = Source(orders).grouped(parallelism).map { ords =>
+          Source() { implicit b =>
+            import FlowGraph.Implicits._
+            val groupSource = ords.map { order =>
+              innerSource(order, index).map(list => list.headOption.fold(Map[String, List[Result]]())(head ⇒ Map(head.groupKey -> list)))
+            }
+            val merge = b.add(Merge[Map[String, List[Result]]](ords.size))
+            groupSource.foreach(_ ~> merge)
+            merge.out
           }
+        }.flatten(akka.stream.scaladsl.FlattenStrategy.concat[Map[String, List[Result]]])
+          .fold(M.zero)((acc,c) => M.append(acc,c))
+          .mapConcat(_.values.toList)
+
+        def cuttingFlow() = Flow[List[Result]].map { list => cuttingStockProblem(list, lenghtThreshold, minLenght, log) }
+
+        val flow = FlowGraph.closed() { implicit b =>
+          import FlowGraph.Implicits._
+          val balancer = b.add(Balance[List[Result]](parallelism))
+          val merge = b.add(Merge[List[Combination]](parallelism))
+          mapSource ~> balancer
+          for (i <- 0 until parallelism) {
+            balancer ~> cuttingFlow() ~> merge
+          }
+          merge ~> Sink.actorSubscriber(Props(classOf[ResultAggregator[T]], lenghtThreshold, outputDir, writer))
         }
-        case -\/(ex) ⇒
-          println(Ansi.red(s"${ex.getClass.getName}: ${ex.getStackTrace.mkString("\n")}: ${ex.getMessage}"))
-          log.debug(s"${ex.getClass.getName}: ${ex.getStackTrace.mkString("\n")}: ${ex.getMessage}")
-        case \/-((-\/(ex), None)) ⇒
-          println(Ansi.red(s"Error while building index: ${ex.getMessage}"))
-          log.debug(s"Error while building index: ${ex.getMessage}")
-        case \/-((_, Some(ex))) ⇒
-          println(Ansi.red(s"Finalizer error while building index: ${ex.getMessage}"))
-          log.debug(s"Finalizer error while building index: ${ex.getMessage}")
+
+        flow.run()
+      }.onFailure {
+        case e: Throwable =>
+          println(Ansi.red(e.getMessage))
+          log.error(e.getMessage)
       }
+    }
+  }
+
+  class ResultAggregator[T <: OutputModule](lenghtThreshold: Int, outDir: String, writer: OutputWriter[T]) extends ActorSubscriber {
+    override protected val requestStrategy = OneByOneRequestStrategy
+    private var acc = writer.Zero
+    override def receive: Receive = {
+      case OnNext(cmbs: List[Combination]) =>
+        acc = writer.monoid.append(acc, writer.monoidMapper(lenghtThreshold, cmbs))
+
+      case OnComplete =>
+        println(s"Result has been written")
+        writer.write((writer convert acc), outDir).unsafePerformIO()
+        context.system.stop(self)
     }
   }
 }

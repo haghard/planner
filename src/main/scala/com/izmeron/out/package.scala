@@ -45,6 +45,7 @@ package object out {
     def convert(v: T#From): T#To
     def monoid: scalaz.Monoid[T#From]
     def monoidMapper: (Int, List[Combination]) ⇒ T#From
+    def Zero: T#From
   }
 
 
@@ -56,8 +57,10 @@ package object out {
     implicit val json = new OutputWriter[JsonOutputModule] {
       private val enc = "UTF-8"
 
+      override val Zero = JsObject("uri" -> JsString("/orders"), "body" -> JsArray())
+
       override val monoid = new scalaz.Monoid[JsonOutputModule#From] {
-        override def zero = JsObject("uri" -> JsString("/orders"), "body" -> JsArray())
+        override def zero = Zero
         override def append(f1: JsObject, f2: ⇒ JsObject): JsObject = {
           (f1, f2) match {
             case (f1: JsObject, f2: JsValue) ⇒
@@ -102,8 +105,10 @@ package object out {
       import java.util.concurrent.atomic.AtomicInteger
       private val counter = new AtomicInteger(0)
 
+      override val Zero: Set[Row] = Set.empty[Row]
+
       override val monoid = new scalaz.Monoid[ExcelOutputModule#From] {
-        override def zero: Set[Row] = Set.empty[Row]
+        override val zero = Zero
         override def append(f1: Set[Row], f2: ⇒ Set[Row]): Set[Row] = f1 ++ f2
       }
 

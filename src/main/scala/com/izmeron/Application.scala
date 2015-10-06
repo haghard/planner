@@ -16,37 +16,28 @@ package com.izmeron
 
 import java.io.File
 
-import knobs._
+import com.typesafe.config.ConfigFactory
 import sbt.complete.Parser
 import sbt.complete.DefaultParsers._
 import com.izmeron.out.{ ExcelOutputModule, JsonOutputModule }
 import com.izmeron.commands.{ Exit, Plan, StaticCheck, CliCommand }
 
 import scala.annotation.tailrec
-import scalaz.concurrent.Task
 
 object Application extends App {
   val outFormatJ = "json"
   val outFormatE = "excel"
-  val cfgPath = "./cfg/planner.cfg"
+  val cfgPath = "./cfg/planner.conf"
 
-  (allConfigs(List(knobs.Required(knobs.FileResource(new File(cfgPath))))) { cfg ⇒
-    for {
-      lenghtThreshold ← cfg.lookup[Int]("planner.distribution.lenghtThreshold")
-      minLenght ← cfg.lookup[Int]("planner.distribution.minLenght")
-      outDir ← cfg.lookup[String]("planner.outputDir")
-    } yield (lenghtThreshold, minLenght, outDir)
-  }).attemptRun.fold({ ex ⇒ println(Ansi.red(ex.getMessage)); System.exit(0) }, { cfg ⇒
-    import scalaz._, Scalaz._
-    (for {
-      th ← cfg._1 \/> "lenghtThreshold is missing in cfg"
-      minL ← cfg._2 \/> "minLenght is missing in cfg"
-      outDir ← cfg._3 \/> "outputDir is missing in cfg"
-    } yield (th, minL, outDir)).fold({ ex ⇒ println(Ansi.red(ex)); System.exit(0) }, { cfg ⇒
-      println(Ansi.green(s"Planner has been started with lenghtThreshold:${cfg._1} minLenght:${cfg._2} outputDir:${cfg._3}"))
-      parseLine(args.mkString(" "), cliParser(cfg._1, cfg._2, cfg._3)).fold(runCli(cfg._1, cfg._2, cfg._3)) { _.start() }
-    })
-  })
+  val cfg = ConfigFactory.parseFile(new File(cfgPath))
+
+  val plannerCfg = cfg.getConfig("akka.settings")
+  val lenghtThreshold = plannerCfg.getInt("distribution.lenghtThreshold")
+  val minLenght = plannerCfg.getInt("distribution.minLenght")
+  val outputDir = plannerCfg.getString("outputDir")
+
+  println(Ansi.green(s"Planner has been started with lenghtThreshold:$lenghtThreshold minLenght:$minLenght outputDir:$outputDir"))
+  parseLine(args.mkString(" "), cliParser(lenghtThreshold, minLenght, outputDir)).fold(runCli(lenghtThreshold, minLenght, outputDir)) { _.start() }
 
   private def readLine[U](parser: Parser[U], prompt: String = "> ", mask: Option[Char] = None): Option[U] = {
     val reader = new sbt.FullReader(None, parser)
@@ -97,10 +88,4 @@ object Application extends App {
     }
     exit | plan | check
   }
-
-  def allConfigs[A](files: List[KnobsResource])(t: MutableConfig ⇒ Task[A]): Task[A] =
-    for {
-      mb ← load(files)
-      r ← t(mb)
-    } yield r
 }
