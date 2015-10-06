@@ -117,7 +117,7 @@ package object commands {
           for (i <- 0 until parallelism) {
             balancer ~> cuttingFlow() ~> merge
           }
-          merge ~> Sink.actorSubscriber(Props(classOf[ResultAggregator[T]], lenghtThreshold, outputDir, writer))
+          merge ~> Sink.actorSubscriber(Props(classOf[ResultAggregator[T]], lenghtThreshold, outputDir, outFormat, writer))
         }
 
         flow.run()
@@ -129,16 +129,22 @@ package object commands {
     }
   }
 
-  class ResultAggregator[T <: OutputModule](lenghtThreshold: Int, outDir: String, writer: OutputWriter[T]) extends ActorSubscriber {
+  class ResultAggregator[T <: OutputModule](lenghtThreshold: Int, outDir: String, outFormat:String, writer: OutputWriter[T]) extends ActorSubscriber {
     override protected val requestStrategy = OneByOneRequestStrategy
-    private var acc = writer.Zero
+    var acc = writer.Zero
+    val message = "Result has been written in file"
+    val exp = s"$message(.+)"
     override def receive: Receive = {
       case OnNext(cmbs: List[Combination]) =>
         acc = writer.monoid.append(acc, writer.monoidMapper(lenghtThreshold, cmbs))
 
       case OnComplete =>
-        println(s"Result has been written")
-        writer.write((writer convert acc), outDir).unsafePerformIO()
+        val path = s"plan_${System.currentTimeMillis()}.${outFormat}"
+        val file = (message + path).replaceAll(exp, s"${Console.RED}$$1${Console.RESET}")
+        println(s"$message: $file")
+        val result = writer convert acc
+        println(Ansi.green(result.toString))
+        writer.write(result, s"$outDir/$path").unsafePerformIO()
         context.system.stop(self)
     }
   }
