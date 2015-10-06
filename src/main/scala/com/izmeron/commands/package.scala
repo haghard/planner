@@ -71,10 +71,8 @@ package object commands {
 
   final class Plan[T <: OutputModule](override val indexPath: String, outputDir: String, outFormat: String, override val minLenght: Int,
                       override val lenghtThreshold: Int, writer: OutputWriter[T]) extends CliCommand with Indexing {
-    import scala.concurrent.duration._
     import scalaz.std.AllInstances._
     val M = implicitly[scalaz.Monoid[Map[String, List[Result]]]]
-    val readIndexTime = 10 seconds
     override val log = org.apache.log4j.Logger.getLogger("planner")
     /**
      * Computation graph
