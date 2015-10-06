@@ -58,7 +58,6 @@ object OrderService {
   private val service = HttpService {
     case req @ POST -> Root / "orders" ⇒
       val queue = async.boundedQueue[List[Result]](parallelism * parallelism)
-
       /**
        * Computation graph
        *
