@@ -21,14 +21,10 @@ File Source    Parallel Source                                              Para
 
 ```
 
-Commands
+Httpie
 =====================
 
 ```scala
 
-check  ./csv/metal2pipes2.csv
-
-plan  ./csv/metal2pipes2.csv --out json
-
-plan  ./csv/metal2pipes2.csv --out excel
+http POST http://127.0.0.1:8001/orders < ./csv/metal2pipes3.csv Accept:application/json --stream
 ```

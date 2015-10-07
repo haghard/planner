@@ -15,7 +15,7 @@
 package com.izmeron
 
 import java.io.FileInputStream
-import akka.actor.{ ActorLogging, ActorSystem }
+import akka.actor.ActorSystem
 import akka.stream.io.Framing
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
@@ -37,7 +37,7 @@ trait Indexing {
   implicit lazy val system: ActorSystem = ActorSystem("Sys", cfg)
 
   lazy val Settings = ActorMaterializerSettings(system)
-    .withInputBuffer(initialSize = 64, maxSize = 64)
+    .withInputBuffer(initialSize = 128, maxSize = 256)
     .withDispatcher("akka.planner")
 
   implicit lazy val materializer = ActorMaterializer(Settings)
@@ -70,7 +70,7 @@ trait Indexing {
       items(11).replaceAll(cvsSpace, empty).toInt)
   }
 
-  val sep = ByteString("\n")
+  val sep = ByteString(System.lineSeparator)
 
   def parseOrder(bs: ByteString): Order = {
     val items = bs.utf8String.split(';')

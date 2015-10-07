@@ -19,13 +19,14 @@ import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.HttpEntity.ChunkStreamPart
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.server.Directives._
-import akka.stream.ActorMaterializer
+import akka.stream.{ OverflowStrategy, ActorMaterializer }
 import akka.stream.actor.ActorSubscriberMessage.{ OnError, OnComplete, OnNext }
 import akka.stream.actor._
 import akka.stream.io.Framing
 import akka.stream.scaladsl._
 import akka.util.ByteString
 import com.izmeron.out.{ JsonOutputModule, OutputWriter }
+import spray.json.JsObject
 
 import scala.annotation.tailrec
 import scala.collection.mutable
@@ -55,15 +56,16 @@ object http {
     }
 
     def cuttingFlow(lenghtThreshold: Int, minLenght: Int, log: akka.event.LoggingAdapter) =
-      Flow[List[Result]].map { list ⇒ cuttingStockProblem(list, lenghtThreshold, minLenght, log) }
+      Flow[List[Result]].buffer(1, OverflowStrategy.backpressure).map { list ⇒ cuttingStockProblem(list, lenghtThreshold, minLenght, log) }
 
-    //http POST http://127.0.0.1:8001/orders < ./csv/metal2pipes2.csv Accept:text/plain
+    //http POST http://127.0.0.1:8001/orders < ./csv/metal2pipes2.csv Accept:application/json --stream
+    //http POST http://127.0.0.1:8001/orders < ./csv/metal2pipes3.csv Accept:application/json --stream
     def apply(port: Int, lenghtThreshold: Int, minLenght: Int, index: mutable.Map[String, RawResult],
               ctx: scala.concurrent.ExecutionContext)(implicit writer: OutputWriter[JsonOutputModule],
                                                       sys: ActorSystem, mat: ActorMaterializer): Future[akka.http.scaladsl.Http.ServerBinding] = {
       val route =
         path("version") {
-          get {
+          post {
             complete {
               "Here's some data... or would be if we had data."
             }
@@ -71,14 +73,21 @@ object http {
         } ~ path("orders") {
           post {
             extractRequest { req ⇒
-              complete {
+              val bufferSize = mat.settings.initialInputBufferSize
 
-                val streamer = sys.actorOf(Props(classOf[Streamer], lenghtThreshold, s"./out/plan_${System.currentTimeMillis()}.json", "json", writer)
-                  .withDispatcher("akka.planner"))
+              val streamer = sys.actorOf(Props(classOf[Streamer], lenghtThreshold, s"./out/plan_${System.currentTimeMillis()}.json", "json",
+                bufferSize, writer).withDispatcher("akka.planner"))
 
-                val sub = ActorSubscriber[List[Combination]](streamer)
-                val pub = ActorPublisher[ChunkStreamPart](streamer)
+              val sub = ActorSubscriber[List[Combination]](streamer)
+              val pub = ActorPublisher[ByteString](streamer)
 
+              val sink = Sink[List[Combination]](sub)
+              val source = Source[ByteString](pub)
+
+              FlowGraph.closed() { implicit b ⇒
+                import FlowGraph.Implicits._
+                val balancer = b.add(Balance[List[Result]](parallelism))
+                val merge = b.add(Merge[List[Combination]](parallelism))
                 val mapSource = (req.entity.dataBytes.via(Framing.delimiter(sep, Int.MaxValue, true).map(parseOrder))
                   .grouped(parallelism).map { ords ⇒
                     Source() { implicit b ⇒
@@ -95,19 +104,15 @@ object http {
                   .fold(M.zero)((acc, c) ⇒ M.append(acc, c))
                   .mapConcat(_.values.toList))
 
-                val flow = FlowGraph.closed() { implicit b ⇒
-                  import FlowGraph.Implicits._
-                  val balancer = b.add(Balance[List[Result]](parallelism))
-                  val merge = b.add(Merge[List[Combination]](parallelism))
-                  mapSource ~> balancer
-                  for (i ← 0 until parallelism) {
-                    balancer ~> cuttingFlow(lenghtThreshold, minLenght, sys.log) ~> merge
-                  }
-                  merge ~> Sink(sub)
+                mapSource ~> balancer
+                for (i ← 0 until parallelism) {
+                  balancer ~> cuttingFlow(lenghtThreshold, minLenght, sys.log) ~> merge
                 }
+                merge ~> sink
+              }.run()
 
-                flow.run()
-                HttpResponse(entity = HttpEntity.Chunked(ContentTypes.`text/plain(UTF-8)`, Source(pub)))
+              complete {
+                HttpResponse(entity = HttpEntity.Chunked.fromData(ContentTypes.`application/json`, source))
               }
             }
           }
@@ -117,39 +122,52 @@ object http {
     }
   }
 
-  class Streamer(lenghtThreshold: Int, outFile: String, outFormat: String, writer: OutputWriter[JsonOutputModule])
-      extends ActorSubscriber with ActorPublisher[ChunkStreamPart] with ActorLogging {
-    private val bufferSize = 100
-    private val queue = mutable.Queue[ChunkStreamPart]()
-
+  class Streamer(lenghtThreshold: Int, outFile: String, outFormat: String,
+                 bufferSize: Int, writer: OutputWriter[JsonOutputModule])
+      extends ActorSubscriber with ActorPublisher[ByteString] with ActorLogging {
+    private val buffer = mutable.Queue[ByteString]()
+    var readed = false
     override protected val requestStrategy = new MaxInFlightRequestStrategy(bufferSize) {
-      override val inFlightInternally = queue.size
+      override val inFlightInternally = buffer.size
+    }
+
+    private val waitingRead: Receive = {
+      case ActorPublisherMessage.Request(n) ⇒
+        //log.debug(s"Request $n")
+        loop(n)
+        //log.debug(s"completed with buffer:${buffer.size}")
+        context.stop(self)
+
+      case ActorPublisherMessage.SubscriptionTimeoutExceeded ⇒
+        onComplete()
+        context.stop(self)
+
+      case ActorPublisherMessage.Cancel ⇒
+        log.debug("client has been canceled")
+        cancel()
+        context.stop(self)
     }
 
     override def receive: Receive = {
       case OnNext(cmbs: List[Combination]) ⇒
-        log.info("push element")
+        //log.info(s"Queue:${buffer.size} Demand:$totalDemand")
         val line = writer.convert(writer.monoidMapper(lenghtThreshold, cmbs))
-        queue += ChunkStreamPart(line)
+        buffer += ByteString(line)
+        if (totalDemand > 0)
+          loop(totalDemand)
 
       case OnComplete ⇒
-        log.debug("client has been exhausted")
         flush
-
-        /*val result = writer convert acc
-        log.debug(s"Output: $outFile ${Ansi.green(result.toString)}")
-        writer.write(result, outFile).unsafePerformIO()
-        */
-        log.debug(s"OnComplete ${queue.size}")
-        context.system.stop(self)
+        if (readed) context.system.stop(self)
+        //log.debug(s"completed with buffer:${buffer.size}")
+        else (context become waitingRead)
 
       case OnError(ex) ⇒
-        log.debug(s"OnError:" + ex.getMessage)
+        log.debug(s"onError: ${ex.getMessage}")
         onError(ex)
 
       case ActorPublisherMessage.Request(n) ⇒
-        log.debug(s"request $n")
-        loop(n)
+        log.debug(s"Request $n")
 
       case ActorPublisherMessage.SubscriptionTimeoutExceeded ⇒
         onComplete()
@@ -162,19 +180,19 @@ object http {
     }
 
     def flush = {
-      while ((isActive && totalDemand > 0) && !queue.isEmpty) {
-        onNext(queue.dequeue())
+      if ((isActive && totalDemand > 0) && !buffer.isEmpty) {
+        onNext(buffer.dequeue())
       }
     }
 
     def loop(n: Long) = {
-      @tailrec def go(n: Long): Unit = {
-        if ((isActive && totalDemand > 0) && !queue.isEmpty && n > 0) {
-          log.info(s"pull element ${queue.size}")
-          onNext(queue.dequeue())
+      @tailrec def go(n: Long): Long = {
+        if ((isActive && totalDemand > 0) && !buffer.isEmpty) {
+          onNext(buffer.dequeue())
           go(n - 1)
-        } else ()
+        } else n
       }
+      readed = true
       go(n)
     }
   }
