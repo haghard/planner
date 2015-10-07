@@ -92,7 +92,7 @@ object netty {
             unfiltered.netty.Server.bind(SocketBinding(httpPort, host))
               .handler(new HttpNettyHandler(this, index, minLenght, lenghtThreshold, log))
               .use(engine)
-              .chunked(1048576)
+              .chunked(1024 * 1000 * 20)
               .beforeStop({
                 log.debug("★ ★ ★ ★ ★ ★  Shutdown server  ★ ★ ★ ★ ★ ★")
               }).start()
