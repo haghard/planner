@@ -14,19 +14,17 @@
 
 package com.izmeron
 
-import akka.actor.{ ActorLogging, Props, ActorSystem }
 import akka.http.scaladsl.Http
-import akka.http.scaladsl.model.HttpEntity.ChunkStreamPart
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.server.Directives._
 import akka.stream.{ OverflowStrategy, ActorMaterializer }
-import akka.stream.actor.ActorSubscriberMessage.{ OnError, OnComplete, OnNext }
 import akka.stream.actor._
 import akka.stream.io.Framing
 import akka.stream.scaladsl._
 import akka.util.ByteString
+import akka.actor.{ ActorLogging, Props, ActorSystem }
 import com.izmeron.out.{ JsonOutputModule, OutputWriter }
-import spray.json.JsObject
+import akka.stream.actor.ActorSubscriberMessage.{ OnError, OnComplete, OnNext }
 
 import scala.annotation.tailrec
 import scala.collection.mutable
@@ -74,10 +72,7 @@ object http {
           post {
             extractRequest { req ⇒
               val bufferSize = mat.settings.initialInputBufferSize
-
-              val streamer = sys.actorOf(Props(classOf[Streamer], lenghtThreshold, s"./out/plan_${System.currentTimeMillis()}.json", "json",
-                bufferSize, writer).withDispatcher("akka.planner"))
-
+              val streamer = sys.actorOf(Props(classOf[Streamer], lenghtThreshold, bufferSize, writer).withDispatcher("akka.planner"))
               val sub = ActorSubscriber[List[Combination]](streamer)
               val pub = ActorPublisher[ByteString](streamer)
 
@@ -122,8 +117,7 @@ object http {
     }
   }
 
-  class Streamer(lenghtThreshold: Int, outFile: String, outFormat: String,
-                 bufferSize: Int, writer: OutputWriter[JsonOutputModule])
+  class Streamer(lenghtThreshold: Int, bufferSize: Int, writer: OutputWriter[JsonOutputModule])
       extends ActorSubscriber with ActorPublisher[ByteString] with ActorLogging {
     private val buffer = mutable.Queue[ByteString]()
     var readed = false
