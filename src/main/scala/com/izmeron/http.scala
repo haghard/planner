@@ -120,7 +120,8 @@ object http {
   class Streamer(lenghtThreshold: Int, bufferSize: Int, writer: OutputWriter[JsonOutputModule])
       extends ActorSubscriber with ActorPublisher[ByteString] with ActorLogging {
     private val buffer = mutable.Queue[ByteString]()
-    var readed = false
+    private var readed = false
+    val start = System.currentTimeMillis()
     override protected val requestStrategy = new MaxInFlightRequestStrategy(bufferSize) {
       override val inFlightInternally = buffer.size
     }
@@ -152,6 +153,7 @@ object http {
 
       case OnComplete ⇒
         flush
+        onNext(ByteString(s""" "latency": ${System.currentTimeMillis() - start} """))
         if (readed) context.system.stop(self)
         //log.debug(s"completed with buffer:${buffer.size}")
         else (context become waitingRead)
@@ -161,7 +163,6 @@ object http {
         onError(ex)
 
       case ActorPublisherMessage.Request(n) ⇒
-        log.debug(s"Request $n")
 
       case ActorPublisherMessage.SubscriptionTimeoutExceeded ⇒
         onComplete()
