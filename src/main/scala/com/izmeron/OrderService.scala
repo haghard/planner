@@ -102,9 +102,10 @@ object OrderService {
         } yield r._2
       }).flatMap(P.emitAll).map(aggregator.distribute(_, index))
 
+      val start = System.currentTimeMillis()
       val src: Process[Task, Process[Task, List[Result]]] = (req.body.flatMap(bVector ⇒ decodeUtf.decode(bVector.toBitVector)) pipe folder)
       val graph = (aggregator.sourceToQueue(src, queue).drain merge merge.mergeN(parallelism)(aggregator.cuttingStock(queue))(CpuIntensive))
-        .map { list ⇒ s"${writer.monoidMapper(lenghtThreshold, list).prettyPrint}\n" }
+        .map { list ⇒ s"${writer.monoidMapper(lenghtThreshold, list).prettyPrint}\n" } ++ P.emit(s"""{ "latency": ${System.currentTimeMillis - start} }""")
         .onFailure { th ⇒
           logger.error(s"{ Error: ${th.getClass.getName}: ${th.getMessage}}")
           P.emit(s"{ Error: ${th.getClass.getName}: ${th.getMessage}}")
