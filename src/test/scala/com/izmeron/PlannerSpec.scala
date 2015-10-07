@@ -14,7 +14,12 @@
 
 package com.izmeron
 
+import com.izmeron._
 import org.specs2.mutable.Specification
+
+import scala.annotation.tailrec
+import scalaz.State
+import scalaz.concurrent.Task
 
 class PlannerSpec extends Specification {
   var lenghtThreshold = 1400
@@ -23,7 +28,7 @@ class PlannerSpec extends Specification {
   val logger = org.apache.log4j.Logger.getLogger("test-planner")
 
   "cuttingStockProblem" should {
-    "scenario0" in {
+    /*"scenario0" in {
       val in =
         Result("86401.095", "Сталь 20Х/120/56", 614, 1228, 2, 2, 1, 1, 0) ::
           Result("86602.056", "Сталь 20Х/120/56", 275, 825, 3, 3, 1, 1, 0) ::
@@ -314,6 +319,38 @@ class PlannerSpec extends Specification {
       expectedLength === sumLen
       actual.isDefined === false
       (sumLen + balance) === combinations.size * lenghtThreshold
+    }
+*/
+    "scenario13" in {
+      val P = scalaz.stream.Process
+
+      @tailrec def loop(lines: Iterator[String], acc: List[Int]): (String, List[Int]) = {
+        if (lines.hasNext) {
+          val cur = lines.next()
+          val fields = cur.split(";")
+          if (fields.length == 3) loop(lines, acc ::: List(fields(0).toInt, fields(1).toInt, fields(2).toInt))
+          else (cur, acc)
+        } else ("", acc)
+      }
+
+      val parse: (String) => (String, List[Int]) =
+        in => {
+          val elements = in.split("\\n").iterator
+          loop(elements, Nil)
+        }
+
+      val src: scalaz.stream.Process[Task, String] = P.emitAll(Seq("1;2;3\n4;5;6\n7;8", "9;1\n1;2;3\n3;4;5\n6;7;89"))
+
+      val flow = src pipe OrderService.stateScan[String,String,List[Int]]("") { batch: String =>
+        for {
+          acc <- State.get[String]
+          r = parse(acc + batch)
+          _ <- State.put(r._1)
+        } yield r._2
+      }
+
+      println(flow.runLog.run)
+      1 === 1
     }
   }
 }

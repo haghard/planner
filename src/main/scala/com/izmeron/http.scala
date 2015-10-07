@@ -30,6 +30,7 @@ object http {
     }
   }
 
+  val Buffer = 1024 * 1000 * 50
   val httpExec = Executors.newFixedThreadPool(Runtime.getRuntime.availableProcessors(),
     new NamedThreadFactory("http-worker"))
 
@@ -51,6 +52,7 @@ object http {
             .mountService(OrderService(aggregator, index, lenghtThreshold0, log0), "/")
             .withServiceExecutor(httpExec)
             .withNio2(true)
+            .withBufferSize(Buffer)
             .run
             .awaitShutdown()
           log0.debug(s"★ ★ ★ ★ ★ ★  Http server started on 127.0.0.1:$httpPort0 ★ ★ ★ ★ ★ ★")

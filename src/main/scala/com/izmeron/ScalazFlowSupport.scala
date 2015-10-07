@@ -29,7 +29,7 @@ trait ScalazFlowSupport {
 
   val loggerSink = scalaz.stream.sink.lift[Task, Iterable[Result]](list ⇒ Task.delay(log.debug(s"order-line: $list")))
 
-  def queuePublisher(it: Iterator[List[Result]]): Process[Task, List[Result]] = {
+  private def queuePublisher(it: Iterator[List[Result]]): Process[Task, List[Result]] = {
     def go(iter: Iterator[List[Result]]): Process[Task, List[Result]] =
       Process.await(Task.delay(iter))(iter ⇒ if (iter.hasNext) Process.emit(iter.next) ++ go(iter) else Process.halt)
     go(it)
@@ -56,5 +56,5 @@ trait ScalazFlowSupport {
       .map { list ⇒ list.headOption.fold(immutable.Map[String, List[Result]]())(head ⇒ immutable.Map(head.groupKey -> list)) }
       .foldMonoid
       .flatMap { map ⇒ queuePublisher(map.values.iterator) to queue.enqueue }
-      .onComplete(scalaz.stream.Process.eval_ { log.debug("Input has been scheduled"); queue.close })
+      .onComplete(scalaz.stream.Process.eval_ { log.debug(s"Input has been scheduled ${queue.##}"); queue.close })
 }

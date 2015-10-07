@@ -14,6 +14,8 @@
 
 package com
 
+import java.util.concurrent.ForkJoinPool
+
 import scala.util.Try
 import scalaz.\/
 import scala.annotation.tailrec

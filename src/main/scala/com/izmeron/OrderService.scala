@@ -16,20 +16,27 @@
 
 package com.izmeron
 
-import java.nio.charset.StandardCharsets
 import com.izmeron.out.{ OutputWriter, JsonOutputModule }
 import org.http4s.dsl._
 import org.http4s.server.HttpService
 import com.izmeron.http._
+import scala.annotation.tailrec
 import scala.collection.mutable
+import scalaz._
 import scalaz.concurrent.Task
-import scalaz.stream.{ async, merge }
+import scalaz.stream._
 
 object OrderService {
   import OutputWriter._
-  import scalaz.stream.csv.rowsR
 
   val P = scalaz.stream.Process
+
+  def stateScan[S, A, B](init: S)(f: A ⇒ State[S, B]): Process1[A, B] = {
+    P.await1[A] flatMap { a ⇒
+      val (s, b) = f(a) run init
+      P.emit(b) ++ stateScan(s)(f)
+    }
+  }
 
   implicit val ex = PlannerEx
   implicit val CpuIntensive = scalaz.concurrent.Strategy.Executor(PlannerEx)
@@ -53,11 +60,23 @@ object OrderService {
     service
   }
 
+  val parser = (batch: String) ⇒
+    parse(batch.split("\\n").iterator, Nil)
+
+  @tailrec private def parse(lines: Iterator[String], acc: List[Order]): (String, List[Order]) = {
+    if (lines.hasNext) {
+      val cur = lines.next()
+      val fields = cur.split(";")
+      if (fields.length == 14) parse(lines, Order(fields(0), fields(13).toInt) :: acc)
+      else (cur, acc)
+    } else ("", acc)
+  }
+
   //echo '94100.00.00.072;5' | curl -d @- http://127.0.0.1:9001/orders
   //http POST http://127.0.0.1:9001/orders < ./csv/metal2pipes2.csv --stream
   private val service = HttpService {
     case req @ POST -> Root / "orders" ⇒
-      val queue = async.boundedQueue[List[Result]](parallelism * parallelism)
+      val queue = async.boundedQueue[List[Result]](Math.pow(2, parallelism).toInt)
       /**
        * Computation graph
        *
@@ -73,26 +92,24 @@ object OrderService {
        * |csv_line2 |---|distribute |--+                                 +------------+   +------------+
        * +----------+   +-----------+
        */
-      val graph = for {
-        bv ← req.body.map(_.toBitVector)
-        lines ← decodeUtf decode bv
-        linesSrc = rowsR[Order](new java.io.ByteArrayInputStream(lines.getBytes(StandardCharsets.UTF_8)), sep)
-        out ← (aggregator.sourceToQueue(linesSrc.map(aggregator.distribute(_, index)), queue).drain merge merge.mergeN(parallelism)(aggregator.cuttingStock(queue)))
-          .map { list ⇒ s"${writer.monoidMapper(lenghtThreshold, list).prettyPrint}\n" }
-          .onFailure { th ⇒ P.emit(s"{ Error: ${th.getClass.getName}: ${th.getMessage}}") }
-      } yield out
-      Ok(graph).chunked
-  }
 
-  private def lines(iter: Iterator[String]) = {
-    def loop(iter: Iterator[String]): scalaz.stream.Process[Task, String] = {
-      scalaz.stream.Process.await(Task.delay(iter)) { iter ⇒
-        if (iter.hasNext) {
-          val line = s"${iter.next}\n"
-          scalaz.stream.Process.emit(line) ++ loop(iter)
-        } else scalaz.stream.Process.halt
-      }
-    }
-    loop(iter)
+      def folder = (stateScan[String, String, List[Order]]("") { batch: String ⇒
+        for {
+          acc ← State.get[String]
+          //_ = log.debug(s"prev: $acc: ${acc.length} \n $batch")
+          r = if (acc.length > 0) parser(acc + batch) else parser(batch)
+          _ ← State.put(r._1)
+        } yield r._2
+      }).flatMap(P.emitAll).map(aggregator.distribute(_, index))
+
+      val src: Process[Task, Process[Task, List[Result]]] = (req.body.flatMap(bVector ⇒ decodeUtf.decode(bVector.toBitVector)) pipe folder)
+      val graph = (aggregator.sourceToQueue(src, queue).drain merge merge.mergeN(parallelism)(aggregator.cuttingStock(queue))(CpuIntensive))
+        .map { list ⇒ s"${writer.monoidMapper(lenghtThreshold, list).prettyPrint}\n" }
+        .onFailure { th ⇒
+          logger.error(s"{ Error: ${th.getClass.getName}: ${th.getMessage}}")
+          P.emit(s"{ Error: ${th.getClass.getName}: ${th.getMessage}}")
+        }
+
+      Ok(graph).chunked
   }
 }
