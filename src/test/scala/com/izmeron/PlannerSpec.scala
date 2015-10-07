@@ -28,7 +28,7 @@ class PlannerSpec extends Specification {
   val logger = org.apache.log4j.Logger.getLogger("test-planner")
 
   "cuttingStockProblem" should {
-    /*"scenario0" in {
+    "scenario0" in {
       val in =
         Result("86401.095", "Сталь 20Х/120/56", 614, 1228, 2, 2, 1, 1, 0) ::
           Result("86602.056", "Сталь 20Х/120/56", 275, 825, 3, 3, 1, 1, 0) ::
@@ -320,7 +320,7 @@ class PlannerSpec extends Specification {
       actual.isDefined === false
       (sumLen + balance) === combinations.size * lenghtThreshold
     }
-*/
+
     "scenario13" in {
       val P = scalaz.stream.Process
 
@@ -340,7 +340,6 @@ class PlannerSpec extends Specification {
         }
 
       val src: scalaz.stream.Process[Task, String] = P.emitAll(Seq("1;2;3\n4;5;6\n7;8", "9;1\n1;2;3\n3;4;5\n6;7;89"))
-
       val flow = src pipe OrderService.stateScan[String,String,List[Int]]("") { batch: String =>
         for {
           acc <- State.get[String]
@@ -349,8 +348,7 @@ class PlannerSpec extends Specification {
         } yield r._2
       }
 
-      println(flow.runLog.run)
-      1 === 1
+      flow.runLog.run === IndexedSeq(List(1, 2, 3, 4, 5, 6), List(7, 89, 1, 1, 2, 3, 3, 4, 5, 6, 7, 89))
     }
   }
 }
