@@ -107,7 +107,7 @@ package object commands {
           println(Ansi.green("Index has been created"))
           log.debug("Index has been created")
           Task.fork {
-            val queue = async.boundedQueue[List[Result]](parallelism * parallelism)
+            val queue = async.boundedQueue[List[Result]](Math.pow(2, parallelism).toInt)
             (inputReader(orderReader map (distribute(_, index)), queue).drain merge merge.mergeN(parallelism)(cuttingStock(queue)))
               .foldMap(writer.monoidMapper(lenghtThreshold, _))(writer.monoid)
               .runLast
