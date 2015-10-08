@@ -54,7 +54,7 @@ object OrderService {
   private var index = mutable.Map[String, RawResult]()
   private var aggregator: OrigamiAggregator with ScalazFlowSupport = _
   private val decodeUtf = scodec.stream.decode.many(scodec.codecs.utf8)
-
+  private val queueSize = Math.pow(2, parallelism).toInt
   def apply(aggregator: OrigamiAggregator with ScalazFlowSupport,
             index: mutable.Map[String, RawResult],
             lenghtThreshold: Int, log: org.apache.log4j.Logger): HttpService = {
@@ -80,8 +80,8 @@ object OrderService {
   //http POST http://127.0.0.1:9001/orders < ./csv/metal2pipes2.csv --stream
   private val service = HttpService {
     case req @ POST -> Root / "orders" ⇒
-      val inputQueue = async.boundedQueue[Order](Math.pow(2, parallelism).toInt)
-      val queue = async.boundedQueue[List[Result]](Math.pow(2, parallelism).toInt)
+      val inputQueue = async.boundedQueue[Order](queueSize)
+      val queue = async.boundedQueue[List[Result]](queueSize)
 
       /**
        *   Request                                                                                      Parallel stage
@@ -111,8 +111,8 @@ object OrderService {
         .onFailure { th ⇒ logger.error(s"qWriter Error: ${th.getClass.getName}: ${th.getMessage}"); P.halt }.run[Task]
 
       val graph = (aggregator.sourceToQueue(inputQueue.dequeue.map(aggregator.distribute(_, index)), queue).drain merge merge.mergeN(parallelism)(aggregator.cuttingStock(queue))(CpuIntensive))
-        .map(list ⇒ s"${writer.monoidMapper(lenghtThreshold, list).prettyPrint}\n") ++ P.emit(s"""{ "latency": ${System.currentTimeMillis - start} }""")
-        .onFailure { th ⇒ logger.error(s"{ Error: ${th.getClass.getName}: ${th.getMessage}}"); P.emit(s"{ Error: ${th.getClass.getName}: ${th.getMessage}}") }
+        .map{list ⇒ s"${writer.monoidMapper(lenghtThreshold, list).prettyPrint}\n"} ++ P.emit(s"""{ "latency": ${System.currentTimeMillis - start} }""")
+        .onFailure{ th ⇒ logger.error(s"Error: ${th.getClass.getName}: ${th.getMessage}"); P.emit(s"{ Error: ${th.getClass.getName}: ${th.getMessage}}") }
 
       Task.fork(qWriter)(newSingleThreadExecutor(new NamedThreadFactory("request-reader"))).runAsync(_ ⇒ ())
       Ok(graph).chunked
