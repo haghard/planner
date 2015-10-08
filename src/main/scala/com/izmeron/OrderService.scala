@@ -81,26 +81,23 @@ object OrderService {
   //http POST http://127.0.0.1:9001/orders < ./csv/metal2pipes2.csv --stream
   private val service = HttpService {
     case req @ POST -> Root / "orders" ⇒
-
       val ordersQueue = async.boundedQueue[Order](Math.pow(2, parallelism).toInt)
       val queue = async.boundedQueue[List[Result]](Math.pow(2, parallelism).toInt)
       /**
-       * TO DO Fix it
-       * Computation graph
        *
-       * File            Parallel stage                                  Parallel stage
-       * +----------+   +-----------+                                    +------------+   +------------+
-       * |csv_line0 |---|distribute |--+                            +----|cuttingStock|---|monoidMapper|
-       * +----------+   +-----------+  |  Fan-in stage              |    +------------+   +------------+
-       * +----------+   +-----------+  |  +----------+  +-------+   |    +------------+   +------------+
-       * |csv_line1 |---|distribute |-----|foldMonoid|--| queue |--------|cuttingStock|---|monoidMapper|
-       * +----------+   +-----------+  |  +----------+  +-------+   |    +------------+   +------------+
-       *                               |                            |    +------------+   +------------+
-       * +----------+   +-----------+  |                            +----|cuttingStock|---|monoidMapper|
-       * |csv_line2 |---|distribute |--+                                 +------------+   +------------+
-       * +----------+   +-----------+
+       *   Request        Request reader                                                            Parallel stage
+       *   +----------+   +-----------+  +-----+                                                   +------------+
+       *   |order0    |---|distribute |--|queue|-+  Parallel stage                            +----|cuttingStock|----+
+       *   +----------+   +-----------+  +-----+ |  +----------+      Fan-in stage            |    +------------+    |
+       *   +----------+                          |--|distribute|---+  +----------+  +-----+   |    +------------+    |  +------------+   +-------+
+       *   |order1    |                          |  +----------+   |  |foldMonoid|--|queue|--------|cuttingStock|-------|monoidMapper|---|convert|
+       *   +----------+                          |  +----------+   +--+----------+  +-----+   |    +------------+    |  +------------+   +-------+
+       *                                         |--|distribute|---+                          |    +------------+    |
+       *   +----------+                          |  +----------+   |                          +----|cuttingStock|----+
+       *   |order2    |                          |  +----------+   |                               +------------+
+       *   +----------+                          |--|distribute|---+
+       *                                            +----------+
        */
-
       val start = System.currentTimeMillis()
       val reqReader = (stateScan[String, String, List[Order]]("") { batch: String ⇒
         for {

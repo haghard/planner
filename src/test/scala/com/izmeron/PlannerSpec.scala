@@ -333,18 +333,18 @@ class PlannerSpec extends Specification {
         } else ("", acc)
       }
 
-      val parse: (String) => (String, List[Int]) =
-        in => {
+      val parse: (String) ⇒ (String, List[Int]) =
+        in ⇒ {
           val elements = in.split("\\n").iterator
           loop(elements, Nil)
         }
 
       val src: scalaz.stream.Process[Task, String] = P.emitAll(Seq("1;2;3\n4;5;6\n7;8", "9;1\n1;2;3\n3;4;5\n6;7;89"))
-      val flow = src pipe OrderService.stateScan[String,String,List[Int]]("") { batch: String =>
+      val flow = src pipe OrderService.stateScan[String, String, List[Int]]("") { batch: String ⇒
         for {
-          acc <- State.get[String]
+          acc ← State.get[String]
           r = parse(acc + batch)
-          _ <- State.put(r._1)
+          _ ← State.put(r._1)
         } yield r._2
       }
 
