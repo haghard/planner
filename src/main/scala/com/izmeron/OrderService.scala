@@ -98,6 +98,7 @@ object OrderService {
        * +----------+   +-----------+
        */
 
+      val start = System.currentTimeMillis()
       val reqReader = (stateScan[String, String, List[Order]]("") { batch: String ⇒
         for {
           acc ← State.get[String]
@@ -107,7 +108,7 @@ object OrderService {
       }).flatMap(P.emitAll)
 
       val qWriter = ((req.body.flatMap(bVector ⇒ decodeUtf.decode(bVector.toBitVector)) pipe reqReader) to ordersQueue.enqueue)
-        .onComplete(scalaz.stream.Process.eval_ { logger.debug(s"Orders input has been scheduled ${ordersQueue.##}"); ordersQueue.close })
+        .onComplete(scalaz.stream.Process.eval_ { logger.debug(s"Orders input has been scheduled"); ordersQueue.close })
         .onFailure { th ⇒
           logger.error(s"qWriter Error: ${th.getClass.getName}: ${th.getMessage}")
           P.halt
@@ -115,14 +116,13 @@ object OrderService {
 
       Task.fork(qWriter)(newSingleThreadExecutor(new NamedThreadFactory("request-reader"))).runAsync(_ ⇒ ())
 
-      val start = System.currentTimeMillis()
       val graph = (aggregator.sourceToQueue(ordersQueue.dequeue.map(aggregator.distribute(_, index)), queue).drain merge merge.mergeN(parallelism)(aggregator.cuttingStock(queue))(CpuIntensive))
         .map { list ⇒ s"${writer.monoidMapper(lenghtThreshold, list).prettyPrint}\n" } ++ P.emit(s"""{ "latency": ${System.currentTimeMillis - start} }""")
         .onFailure { th ⇒
           logger.error(s"{ Error: ${th.getClass.getName}: ${th.getMessage}}")
           P.emit(s"{ Error: ${th.getClass.getName}: ${th.getMessage}}")
         }
-      //93900.00.07.005
+
       Ok(graph).chunked
   }
 }

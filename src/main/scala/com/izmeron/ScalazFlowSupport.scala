@@ -56,5 +56,5 @@ trait ScalazFlowSupport {
       .map { list ⇒ list.headOption.fold(immutable.Map[String, List[Result]]())(head ⇒ immutable.Map(head.groupKey -> list)) }
       .foldMonoid
       .flatMap { map ⇒ queuePublisher(map.values.iterator) to queue.enqueue }
-      .onComplete(scalaz.stream.Process.eval_ { log.debug(s"Results input has been scheduled ${queue.##}"); queue.close })
+      .onComplete(scalaz.stream.Process.eval_ { log.debug(s"Results input has been scheduled"); queue.close })
 }
