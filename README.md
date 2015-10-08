@@ -6,7 +6,7 @@ Computation graph
 
 ```scala
 
-File           Parallel stage                                         Parallel stage
+Request         Parallel stage                                         Parallel stage
 +----------+   +-----------+                                          +------------+
 |csv_line0 |---|distribute |--+                                  +----|cuttingStock|----+
 +----------+   +-----------+  |  Fan-in stage  Back pres prim    |    +------------+    |
@@ -26,9 +26,5 @@ Commands
 
 ```scala
 
-check  ./csv/metal2pipes2.csv
-
-plan  ./csv/metal2pipes2.csv --out json
-
-plan  ./csv/metal2pipes2.csv --out excel
+http POST http://127.0.0.1:9001/orders < ./csv/metal2pipes3.csv Accept:application/json --stream
 ```

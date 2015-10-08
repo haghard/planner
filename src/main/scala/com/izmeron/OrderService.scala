@@ -16,6 +16,8 @@
 
 package com.izmeron
 
+import java.util.concurrent.Executors._
+
 import com.izmeron.out.{ OutputWriter, JsonOutputModule }
 import org.http4s.dsl._
 import org.http4s.server.HttpService
@@ -76,8 +78,11 @@ object OrderService {
   //http POST http://127.0.0.1:9001/orders < ./csv/metal2pipes2.csv --stream
   private val service = HttpService {
     case req @ POST -> Root / "orders" ⇒
+
+      val ordersQueue = async.boundedQueue[Order](Math.pow(2, parallelism).toInt)
       val queue = async.boundedQueue[List[Result]](Math.pow(2, parallelism).toInt)
       /**
+       * TO DO Fix it
        * Computation graph
        *
        * File            Parallel stage                                  Parallel stage
@@ -93,24 +98,31 @@ object OrderService {
        * +----------+   +-----------+
        */
 
-      def folder = (stateScan[String, String, List[Order]]("") { batch: String ⇒
+      val reqReader = (stateScan[String, String, List[Order]]("") { batch: String ⇒
         for {
           acc ← State.get[String]
-          //_ = log.debug(s"prev: $acc: ${acc.length} \n $batch")
           r = if (acc.length > 0) parser(acc + batch) else parser(batch)
           _ ← State.put(r._1)
         } yield r._2
-      }).flatMap(P.emitAll).map(aggregator.distribute(_, index))
+      }).flatMap(P.emitAll)
+
+      val qWriter = ((req.body.flatMap(bVector ⇒ decodeUtf.decode(bVector.toBitVector)) pipe reqReader) to ordersQueue.enqueue)
+        .onComplete(scalaz.stream.Process.eval_ { logger.debug(s"Orders input has been scheduled ${ordersQueue.##}"); ordersQueue.close })
+        .onFailure { th ⇒
+          logger.error(s"qWriter Error: ${th.getClass.getName}: ${th.getMessage}")
+          P.halt
+        }.run[Task]
+
+      Task.fork(qWriter)(newSingleThreadExecutor(new NamedThreadFactory("request-reader"))).runAsync(_ ⇒ ())
 
       val start = System.currentTimeMillis()
-      val src: Process[Task, Process[Task, List[Result]]] = (req.body.flatMap(bVector ⇒ decodeUtf.decode(bVector.toBitVector)) pipe folder)
-      val graph = (aggregator.sourceToQueue(src, queue).drain merge merge.mergeN(parallelism)(aggregator.cuttingStock(queue))(CpuIntensive))
+      val graph = (aggregator.sourceToQueue(ordersQueue.dequeue.map(aggregator.distribute(_, index)), queue).drain merge merge.mergeN(parallelism)(aggregator.cuttingStock(queue))(CpuIntensive))
         .map { list ⇒ s"${writer.monoidMapper(lenghtThreshold, list).prettyPrint}\n" } ++ P.emit(s"""{ "latency": ${System.currentTimeMillis - start} }""")
         .onFailure { th ⇒
           logger.error(s"{ Error: ${th.getClass.getName}: ${th.getMessage}}")
           P.emit(s"{ Error: ${th.getClass.getName}: ${th.getMessage}}")
         }
-
+      //93900.00.07.005
       Ok(graph).chunked
   }
 }
