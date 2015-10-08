@@ -68,14 +68,13 @@ object OrderService {
   private val parser = (batch: String) ⇒
     parse(batch.split("\\n").iterator, Nil)
 
-  @tailrec private def parse(lines: Iterator[String], acc: List[Order]): (String, List[Order]) = {
+  @tailrec private def parse(lines: Iterator[String], acc: List[Order]): (String, List[Order]) =
     if (lines.hasNext) {
       val cur = lines.next()
       val fields = cur.split(";")
       if (fields.length == 14) parse(lines, Order(fields(0), fields(13).toInt) :: acc)
       else (cur, acc)
     } else ("", acc)
-  }
 
   //echo '94100.00.00.072;5' | curl -d @- http://127.0.0.1:9001/orders
   //http POST http://127.0.0.1:9001/orders < ./csv/metal2pipes2.csv --stream
