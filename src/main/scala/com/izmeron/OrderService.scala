@@ -33,6 +33,9 @@ object OrderService {
 
   val P = scalaz.stream.Process
 
+  /**
+   * This function is available in scalaz-stream 0.8
+   */
   def stateScan[S, A, B](init: S)(f: A ⇒ State[S, B]): Process1[A, B] = {
     P.await1[A] flatMap { a ⇒
       val (s, b) = f(a) run init
@@ -62,7 +65,7 @@ object OrderService {
     service
   }
 
-  val parser = (batch: String) ⇒
+  private val parser = (batch: String) ⇒
     parse(batch.split("\\n").iterator, Nil)
 
   @tailrec private def parse(lines: Iterator[String], acc: List[Order]): (String, List[Order]) = {
