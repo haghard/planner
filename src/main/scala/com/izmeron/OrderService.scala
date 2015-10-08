@@ -83,20 +83,20 @@ object OrderService {
     case req @ POST -> Root / "orders" ⇒
       val ordersQueue = async.boundedQueue[Order](Math.pow(2, parallelism).toInt)
       val queue = async.boundedQueue[List[Result]](Math.pow(2, parallelism).toInt)
+
       /**
-       *
-       *   Request        Request reader                                                            Parallel stage
-       *   +----------+   +-----------+  +-----+                                                   +------------+
-       *   |order0    |---|distribute |--|queue|-+  Parallel stage                            +----|cuttingStock|----+
-       *   +----------+   +-----------+  +-----+ |  +----------+      Fan-in stage            |    +------------+    |
-       *   +----------+                          |--|distribute|---+  +----------+  +-----+   |    +------------+    |  +------------+   +-------+
-       *   |order1    |                          |  +----------+   |  |foldMonoid|--|queue|--------|cuttingStock|-------|monoidMapper|---|convert|
-       *   +----------+                          |  +----------+   +--+----------+  +-----+   |    +------------+    |  +------------+   +-------+
-       *                                         |--|distribute|---+                          |    +------------+    |
-       *   +----------+                          |  +----------+   |                          +----|cuttingStock|----+
-       *   |order2    |                          |  +----------+   |                               +------------+
-       *   +----------+                          |--|distribute|---+
-       *                                            +----------+
+       *   Request                                                                                      Parallel stage
+       *   +----------+   +----------------+  +-----+                                                   +------------+
+       *   |order0    |---|Stateful reader |--|queue|-+  Parallel stage                            +----|cuttingStock|----+
+       *   +----------+   +----------------+  +-----+ |  +----------+      Fan-in stage            |    +------------+    |
+       *   +----------+                               |--|distribute|---+  +----------+  +-----+   |    +------------+    |  +------------+   +-------+
+       *   |order1    |                               |  +----------+   |  |foldMonoid|--|queue|--------|cuttingStock|-------|monoidMapper|---|convert|
+       *   +----------+                               |  +----------+   +--+----------+  +-----+   |    +------------+    |  +------------+   +-------+
+       *                                              |--|distribute|---+                          |    +------------+    |
+       *   +----------+                               |  +----------+   |                          +----|cuttingStock|----+
+       *   |order2    |                               |  +----------+   |                               +------------+
+       *   +----------+                               |--|distribute|---+
+       *                                                 +----------+
        */
       val start = System.currentTimeMillis()
       val reqReader = (stateScan[String, String, List[Order]]("") { batch: String ⇒
