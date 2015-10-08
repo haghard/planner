@@ -6,7 +6,7 @@ Computation graph
 
 ```scala
 
-Request        Request reader                                                            Parallel stage
+Request                                                                                     Parallel stage
 +----------+   +---------------+  +-----+                                                   +------------+
 |order0    |---|Stateful reader|--|queue|-+  Parallel stage                            +----|cuttingStock|----+
 +----------+   +---------------+  +-----+ |  +----------+      Fan-in stage            |    +------------+    |
