@@ -27,7 +27,7 @@ import scala.concurrent.Future
 trait Indexing {
   import akka.stream.io.Implicits._
 
-  implicit val system: ActorSystem = ActorSystem("Sys", Application.cfg)
+  implicit val system: ActorSystem = ActorSystem("System", Application.cfg)
   val Settings = ActorMaterializerSettings(system)
     .withInputBuffer(initialSize = 64, maxSize = 64)
     .withDispatcher("akka.planner")
@@ -38,7 +38,7 @@ trait Indexing {
   def minLenght: Int
   def indexPath: String
   def lenghtThreshold: Int
-  def log: org.apache.log4j.Logger
+  def log: akka.event.LoggingAdapter
 
   def parseCsv(bs: ByteString): Etalon = {
     val items = bs.utf8String.split(';')
@@ -93,13 +93,6 @@ trait Indexing {
   }
 
   def indexedOrders: Future[(List[Order], mutable.Map[String, RawResult])] = (readOrders zip createFileIndex)
-
-  def innerSource(order: Order, index: mutable.Map[String, RawResult]) = Source {
-    Future {
-      val raw = index(order.kd)
-      distributeWithinGroup(lenghtThreshold, minLenght, log)(groupByOptimalNumber(order, lenghtThreshold, minLenght, log)(raw))
-    }(dispatcher)
-  }
 
   def maxLengthCheck: Future[Int] =
     (Source.inputStream(() ⇒ new FileInputStream(indexPath)) via Framing.delimiter(sep, Int.MaxValue, true))

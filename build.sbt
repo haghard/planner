@@ -55,7 +55,6 @@ resolvers ++= Seq(
 )
 
 libraryDependencies ++= Seq(
-  "log4j"               %   "log4j"                   %   "1.2.14",
   "io.spray"            %%  "spray-json"              %   "1.3.2",
   "org.scala-sbt"       %   "completion"              %   "0.13.9",
   "info.folone"         %%  "poi-scala"               %   "0.15",

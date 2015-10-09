@@ -14,11 +14,14 @@
 
 package com.izmeron
 
-import akka.actor.Props
+import akka.actor.{ActorRef, Props}
 import akka.stream.actor.ActorSubscriberMessage.{OnComplete, OnNext}
 import akka.stream.actor.{OneByOneRequestStrategy, ActorSubscriber}
 import akka.stream.scaladsl._
 import com.izmeron.out.{OutputWriter, OutputModule}
+
+import scala.collection.mutable
+import scala.concurrent.{Await, Future}
 
 package object commands {
 
@@ -46,7 +49,7 @@ package object commands {
 
   final class StaticCheck(override val indexPath: String, override val minLenght: Int,
                           override val lenghtThreshold: Int) extends CliCommand with Indexing  {
-    override val log = org.apache.log4j.Logger.getLogger("static-check")
+    override val log = system.log
     import StaticCheck._
     override def start() = {
       (maxLengthCheck zip multiplicity).map { case (max, error) =>
@@ -64,6 +67,47 @@ package object commands {
   }
 
   object Plan {
+    import scalaz.std.AllInstances._
+    val M = implicitly[scalaz.Monoid[Map[String, List[Result]]]]
+
+    def innerSource(order: Order, index: mutable.Map[String, RawResult],
+                    lenghtThreshold: Int, minLenght: Int, log: akka.event.LoggingAdapter)
+                   (implicit dispatcher: scala.concurrent.ExecutionContext) = Source {
+      Future {
+        val raw = index(order.kd)
+        distributeWithinGroup(lenghtThreshold, minLenght, log)(groupByOptimalNumber(order, lenghtThreshold, minLenght, log)(raw))
+      }(dispatcher)
+    }
+
+    private def cutting(lenghtThreshold: Int, minLenght: Int, log: akka.event.LoggingAdapter) = Flow[List[Result]].buffer(1, akka.stream.OverflowStrategy.backpressure)
+      .map { list => cuttingStockProblem(list, lenghtThreshold, minLenght, log) }
+
+    private def orderSource(orders: List[Order], index: mutable.Map[String, RawResult],
+                          lenghtThreshold: Int, minLenght: Int, log: akka.event.LoggingAdapter)
+                          (implicit dispatcher: scala.concurrent.ExecutionContext) =
+      Source(orders).grouped(parallelism).map { ords =>
+        Source() { implicit b =>
+          import FlowGraph.Implicits._
+          val groupSource = ords.map { order =>
+            innerSource(order, index, lenghtThreshold, minLenght, log)
+              .map(list => list.headOption.fold(Map[String, List[Result]]())(head ⇒ Map(head.groupKey -> list)))
+          }
+          val merge = b.add(Merge[Map[String, List[Result]]](ords.size))
+          groupSource.foreach(_ ~> merge)
+          merge.out
+        }
+      }.flatten(akka.stream.scaladsl.FlattenStrategy.concat[Map[String, List[Result]]])
+        .fold(M.zero)((acc,c) => M.append(acc,c))
+        .mapConcat(_.values.toList)
+
+    private def cuttingFlow(lenghtThreshold: Int, minLenght: Int, log: akka.event.LoggingAdapter) = Flow() { implicit b =>
+      import FlowGraph.Implicits._
+      val balancer = b.add(Balance[List[Result]](parallelism))
+      val merge = b.add(Merge[List[Combination]](parallelism))
+      (0 until parallelism).foreach { _ => balancer ~> cutting(lenghtThreshold, minLenght, log) ~> merge }
+      (balancer.in, merge.out)
+    }
+
     def apply[T <: OutputModule](path: String, outputDir: String, outFormat: String, minLenght: Int, lenghtThreshold: Int)
                                 (implicit writer: OutputWriter[T]) =
       new Plan[T](path, outputDir, outFormat, minLenght, lenghtThreshold, writer)
@@ -71,9 +115,8 @@ package object commands {
 
   final class Plan[T <: OutputModule](override val indexPath: String, outputDir: String, outFormat: String, override val minLenght: Int,
                       override val lenghtThreshold: Int, writer: OutputWriter[T]) extends CliCommand with Indexing {
-    import scalaz.std.AllInstances._
-    val M = implicitly[scalaz.Monoid[Map[String, List[Result]]]]
-    override val log = org.apache.log4j.Logger.getLogger("planner")
+    import Plan._
+    override val log = system.log
     /**
      * Computation graph
      *
@@ -90,48 +133,32 @@ package object commands {
      * +----------+   +-----------+
      */
     override def start(): Unit = {
-      indexedOrders.map { case (orders, index) =>
-        val mapSource = Source(orders).grouped(parallelism).map { ords =>
-          Source() { implicit b =>
-            import FlowGraph.Implicits._
-            val groupSource = ords.map { order =>
-              innerSource(order, index).map(list => list.headOption.fold(Map[String, List[Result]]())(head ⇒ Map(head.groupKey -> list)))
-            }
-            val merge = b.add(Merge[Map[String, List[Result]]](ords.size))
-            groupSource.foreach(_ ~> merge)
-            merge.out
-          }
-        }.flatten(akka.stream.scaladsl.FlattenStrategy.concat[Map[String, List[Result]]])
-          .fold(M.zero)((acc,c) => M.append(acc,c))
-          .mapConcat(_.values.toList)
-
-        def cuttingFlow() = Flow[List[Result]].map { list => cuttingStockProblem(list, lenghtThreshold, minLenght, log) }
-
-        val flow = FlowGraph.closed() { implicit b =>
-          import FlowGraph.Implicits._
-          val balancer = b.add(Balance[List[Result]](parallelism))
-          val merge = b.add(Merge[List[Combination]](parallelism))
-          mapSource ~> balancer
-          for (i <- 0 until parallelism) {
-            balancer ~> cuttingFlow() ~> merge
-          }
-          merge ~> Sink.actorSubscriber(Props(classOf[ResultAggregator[T]], lenghtThreshold, outputDir, outFormat, writer))
-        }
-
-        flow.run()
-      }.onFailure {
-        case e: Throwable =>
-          println(Ansi.red(e.getMessage))
-          log.error(e.getMessage)
-      }
+      import scala.concurrent.duration._
+      //DOTO timeout in config
+      Await.ready(
+        (indexedOrders.flatMap { case (orders, index) =>
+        val actor = (orderSource(orders, index, lenghtThreshold, minLenght, system.log) via cuttingFlow(lenghtThreshold, minLenght, system.log))
+          .runWith(Sink.actorSubscriber(Props(classOf[ResultAggregator[T]], lenghtThreshold, outputDir, outFormat, writer)))
+          import akka.pattern.ask
+          implicit val timeout = akka.util.Timeout(180 seconds)
+          val future = actor ? 'GetResult
+          future
+        }).recoverWith {
+          case e: Exception =>
+            println(Ansi.red(e.getMessage))
+            log.error(e.getMessage)
+            Future.failed(e)
+        }, 185 seconds)
     }
   }
 
   class ResultAggregator[T <: OutputModule](lenghtThreshold: Int, outDir: String, outFormat:String, writer: OutputWriter[T]) extends ActorSubscriber {
     override protected val requestStrategy = OneByOneRequestStrategy
     var acc = writer.Zero
+    var requestor: Option[ActorRef] = None
     val message = "Result has been written in file"
     val exp = s"$message(.+)"
+
     override def receive: Receive = {
       case OnNext(cmbs: List[Combination]) =>
         acc = writer.monoid.append(acc, writer.monoidMapper(lenghtThreshold, cmbs))
@@ -141,9 +168,11 @@ package object commands {
         val file = (message + path).replaceAll(exp, s"${Console.RED}$$1${Console.RESET}")
         println(s"$message: $file")
         val result = writer convert acc
-        println(Ansi.green(result.toString))
+        //println(Ansi.green(result.toString))
         writer.write(result, s"$outDir/$path").unsafePerformIO()
+        requestor.foreach(_ ! 'Ok)
         context.system.stop(self)
+      case 'GetResult => requestor = Option(sender())
     }
   }
 }
