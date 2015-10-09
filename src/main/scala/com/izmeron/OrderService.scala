@@ -44,10 +44,9 @@ object OrderService {
   }
 
   implicit val ex = PlannerEx
-  implicit val CpuIntensive = scalaz.concurrent.Strategy.Executor(PlannerEx)
+  implicit val Cpu = scalaz.concurrent.Strategy.Executor(PlannerEx)
   implicit val Codec: scala.io.Codec = scala.io.Codec.UTF8
 
-  private val sep = ';'
   private var lenghtThreshold = 0
   private var logger: org.apache.log4j.Logger = _
   private val writer = OutputWriter[JsonOutputModule]
@@ -101,6 +100,7 @@ object OrderService {
       val reqReader = (stateScan[String, String, List[Order]]("") { batch: String ⇒
         for {
           acc ← State.get[String]
+          _ = logger.debug("read chunk")
           r = if (acc.length > 0) parser(acc + batch) else parser(batch)
           _ ← State.put(r._1)
         } yield r._2
@@ -110,11 +110,11 @@ object OrderService {
         .onComplete(scalaz.stream.Process.eval_ { logger.debug(s"Orders input has been scheduled"); inputQueue.close })
         .onFailure { th ⇒ logger.error(s"qWriter Error: ${th.getClass.getName}: ${th.getMessage}"); P.halt }.run[Task]
 
-      val graph = (aggregator.sourceToQueue(inputQueue.dequeue.map(aggregator.distribute(_, index)), queue).drain merge merge.mergeN(parallelism)(aggregator.cuttingStock(queue))(CpuIntensive))
-        .map{list ⇒ s"${writer.monoidMapper(lenghtThreshold, list).prettyPrint}\n"} ++ P.emit(s"""{ "latency": ${System.currentTimeMillis - start} }""")
-        .onFailure{ th ⇒ logger.error(s"Error: ${th.getClass.getName}: ${th.getMessage}"); P.emit(s"{ Error: ${th.getClass.getName}: ${th.getMessage}}") }
+      val graph = ((aggregator.sourceToQueue(inputQueue.dequeue.map(aggregator.distribute(_, index)), queue)).drain merge merge.mergeN(parallelism)(aggregator.cuttingStock(queue)))
+        .map { list ⇒ s"${writer.monoidMapper(lenghtThreshold, list).prettyPrint}\n" } ++ P.emit(s"""{ "latency": ${System.currentTimeMillis - start} }""")
+        .onFailure { th ⇒ logger.error(s"Error: ${th.getClass.getName}: ${th.getMessage}"); P.emit(s"{ Error: ${th.getClass.getName}: ${th.getMessage}}") }
 
-      Task.fork(qWriter)(newSingleThreadExecutor(new NamedThreadFactory("request-reader"))).runAsync(_ ⇒ ())
+      qWriter.runAsync(_ ⇒ ())
       Ok(graph).chunked
   }
 }
