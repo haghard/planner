@@ -134,7 +134,7 @@ package object commands {
      */
     override def start(): Unit = {
       import scala.concurrent.duration._
-      //DOTO timeout in config
+      //TODO: put timeout in config, write task latency
       Await.ready(
         (indexedOrders.flatMap { case (orders, index) =>
         val actor = (orderSource(orders, index, lenghtThreshold, minLenght, system.log) via cuttingFlow(lenghtThreshold, minLenght, system.log))
@@ -172,7 +172,8 @@ package object commands {
         writer.write(result, s"$outDir/$path").unsafePerformIO()
         requestor.foreach(_ ! 'Ok)
         context.system.stop(self)
-      case 'GetResult => requestor = Option(sender())
+      case 'GetResult =>
+        requestor = Option(sender())
     }
   }
 }
