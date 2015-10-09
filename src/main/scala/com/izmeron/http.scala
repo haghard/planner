@@ -14,7 +14,9 @@
 
 package com.izmeron
 
+import akka.event.LoggingAdapter
 import akka.http.scaladsl.Http
+import akka.http.scaladsl.Http.ServerBinding
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.server.Directives._
 import akka.stream.{ OverflowStrategy, ActorMaterializer }
@@ -38,12 +40,12 @@ object http {
 
     val sep = ByteString("\n")
 
-    def parseOrder(bs: ByteString): Order = {
+    private def parseOrder(bs: ByteString): Order = {
       val items = bs.utf8String.split(';')
       Order(items(0), items(13).toInt)
     }
 
-    def innerSource(order: Order, index: mutable.Map[String, RawResult],
+    private def innerSource(order: Order, index: mutable.Map[String, RawResult],
                     lenghtThreshold: Int, minLenght: Int,
                     log: akka.event.LoggingAdapter)(implicit ctx: scala.concurrent.ExecutionContext) = Source {
       Future {
@@ -53,14 +55,42 @@ object http {
       }(ctx)
     }
 
-    def cuttingFlow(lenghtThreshold: Int, minLenght: Int, log: akka.event.LoggingAdapter) =
+    private def cutting(lenghtThreshold: Int, minLenght: Int, log: akka.event.LoggingAdapter) =
       Flow[List[Result]].buffer(1, OverflowStrategy.backpressure).map { list ⇒ cuttingStockProblem(list, lenghtThreshold, minLenght, log) }
+
+    private def plannerSource(req: HttpRequest, index: mutable.Map[String, RawResult],
+                              lenghtThreshold: Int, minLenght: Int, log: LoggingAdapter)(implicit ctx: scala.concurrent.ExecutionContext) =
+      req.entity.dataBytes.via(Framing.delimiter(sep, Int.MaxValue, true).map(parseOrder))
+        .grouped(parallelism).map { ords ⇒
+          Source() { implicit b ⇒
+            import FlowGraph.Implicits._
+            val groupSource = ords.map { order ⇒
+              innerSource(order, index, lenghtThreshold, minLenght, log)(ctx)
+                .map(list ⇒ list.headOption.fold(Map[String, List[Result]]())(head ⇒ Map(head.groupKey -> list)))
+            }
+            val merge = b.add(Merge[Map[String, List[Result]]](ords.size))
+            groupSource.foreach(_ ~> merge)
+            merge.out
+          }
+        }.flatten(akka.stream.scaladsl.FlattenStrategy.concat[Map[String, List[Result]]])
+        .fold(M.zero)((acc, c) ⇒ M.append(acc, c))
+        .mapConcat(_.values.toList)
+
+    private def cuttingGraph(lenghtThreshold: Int, minLenght: Int, log: LoggingAdapter) =
+      Flow() { implicit b ⇒
+        import FlowGraph.Implicits._
+        val balancer = b.add(Balance[List[Result]](parallelism))
+        val merge = b.add(Merge[List[Combination]](parallelism))
+        for (i ← 0 until parallelism) {
+          balancer ~> cutting(lenghtThreshold, minLenght, log) ~> merge
+        }
+        (balancer.in, merge.out)
+      }
 
     //http POST http://127.0.0.1:8001/orders < ./csv/metal2pipes2.csv Accept:application/json --stream
     //http POST http://127.0.0.1:8001/orders < ./csv/metal2pipes3.csv Accept:application/json --stream
-    def apply(port: Int, lenghtThreshold: Int, minLenght: Int, index: mutable.Map[String, RawResult],
-              ctx: scala.concurrent.ExecutionContext)(implicit writer: OutputWriter[JsonOutputModule],
-                                                      sys: ActorSystem, mat: ActorMaterializer): Future[akka.http.scaladsl.Http.ServerBinding] = {
+    def apply(port: Int, lenghtThreshold: Int, minLenght: Int, index: mutable.Map[String, RawResult])(implicit writer: OutputWriter[JsonOutputModule],
+                                                                                                      ctx: scala.concurrent.ExecutionContext, sys: ActorSystem, mat: ActorMaterializer): Future[ServerBinding] = {
       val route =
         path("version") {
           post {
@@ -71,42 +101,14 @@ object http {
         } ~ path("orders") {
           post {
             extractRequest { req ⇒
-              val bufferSize = mat.settings.initialInputBufferSize
-              val streamer = sys.actorOf(Props(classOf[Streamer], lenghtThreshold, bufferSize, writer).withDispatcher("akka.planner"))
-              val sub = ActorSubscriber[List[Combination]](streamer)
-              val pub = ActorPublisher[ByteString](streamer)
-
-              val sink = Sink[List[Combination]](sub)
-              val source = Source[ByteString](pub)
-
-              FlowGraph.closed() { implicit b ⇒
-                import FlowGraph.Implicits._
-                val balancer = b.add(Balance[List[Result]](parallelism))
-                val merge = b.add(Merge[List[Combination]](parallelism))
-                val mapSource = (req.entity.dataBytes.via(Framing.delimiter(sep, Int.MaxValue, true).map(parseOrder))
-                  .grouped(parallelism).map { ords ⇒
-                    Source() { implicit b ⇒
-                      import FlowGraph.Implicits._
-                      val groupSource = ords.map { order ⇒
-                        innerSource(order, index, lenghtThreshold, minLenght, sys.log)(ctx)
-                          .map(list ⇒ list.headOption.fold(Map[String, List[Result]]())(head ⇒ Map(head.groupKey -> list)))
-                      }
-                      val merge = b.add(Merge[Map[String, List[Result]]](ords.size))
-                      groupSource.foreach(_ ~> merge)
-                      merge.out
-                    }
-                  }.flatten(akka.stream.scaladsl.FlattenStrategy.concat[Map[String, List[Result]]])
-                  .fold(M.zero)((acc, c) ⇒ M.append(acc, c))
-                  .mapConcat(_.values.toList))
-
-                mapSource ~> balancer
-                for (i ← 0 until parallelism) {
-                  balancer ~> cuttingFlow(lenghtThreshold, minLenght, sys.log) ~> merge
-                }
-                merge ~> sink
-              }.run()
-
               complete {
+                val bufferSize = mat.settings.initialInputBufferSize
+                val streamer = sys.actorOf(Props(classOf[Streamer], lenghtThreshold, bufferSize, writer).withDispatcher("akka.planner"))
+                val sub = ActorSubscriber[List[Combination]](streamer)
+                val sink = Sink[List[Combination]](sub)
+                val pub = ActorPublisher[ByteString](streamer)
+                val source = Source[ByteString](pub)
+                (plannerSource(req, index, lenghtThreshold, minLenght, sys.log) via cuttingGraph(lenghtThreshold, minLenght, sys.log)).runWith(sink)
                 HttpResponse(entity = HttpEntity.Chunked.fromData(ContentTypes.`application/json`, source))
               }
             }
