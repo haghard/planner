@@ -41,7 +41,7 @@ package object out {
   @implicitNotFound(msg = "Cannot find OutputWriter type class for ${T}")
   trait OutputWriter[T <: OutputModule] {
     def empty: T#To
-    def write(v: T#To, outputDir: String): IO[Unit]
+    def write(v: T#To, outputFile: String): IO[Unit]
     def convert(v: T#From): T#To
     def monoid: scalaz.Monoid[T#From]
     def monoidMapper: (Int, List[Combination]) ⇒ T#From
@@ -91,8 +91,8 @@ package object out {
       override def empty: JsonOutputModule#To = JsObject().prettyPrint
       override def convert(v: JsonOutputModule#From) = v.prettyPrint
 
-      override def write(v: JsonOutputModule#To, outputDir: String): IO[Unit] = {
-        val out = new PrintWriter(new File(s"$outputDir/plan_${System.currentTimeMillis()}.json"), enc)
+      override def write(v: JsonOutputModule#To, outputFile: String): IO[Unit] = {
+        val out = new PrintWriter(new File(outputFile), enc)
         IO { out.print(v.asInstanceOf[String]) }.ensuring(IO { out.close() })
       }
     }
@@ -127,10 +127,8 @@ package object out {
 
       override def convert(v: ExcelOutputModule#From) = Workbook(Set(info.folone.scala.poi.Sheet("plan")(v)))
 
-      override def write(v: ExcelOutputModule#To, outputDir: String): IO[Unit] = {
-        v.safeToFile(s"$outputDir/plan_${System.currentTimeMillis()}.xls")
-          .fold(ex ⇒ throw ex, identity)
-      }
+      override def write(v: ExcelOutputModule#To, outputFile: String): IO[Unit] = 
+        v.safeToFile(outputFile).fold(ex ⇒ throw ex, identity)
     }
   }
 }

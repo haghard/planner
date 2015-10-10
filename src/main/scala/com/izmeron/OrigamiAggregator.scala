@@ -26,7 +26,7 @@ trait OrigamiAggregator {
   import scalaz.stream.Process
   import scalaz.std.AllInstances._
 
-  def path: String
+  def indexPath: String
 
   def minLenght: Int
 
@@ -37,7 +37,7 @@ trait OrigamiAggregator {
   implicit val Codec: scala.io.Codec = scala.io.Codec.UTF8
 
   def indexReader: scalaz.stream.Process[Task, Etalon] =
-    scalaz.stream.csv.rowsR[RawCsvLine](path, ';').map { raw ⇒
+    scalaz.stream.csv.rowsR[RawCsvLine](indexPath, ';').map { raw ⇒
       Etalon(raw.kd, raw.name, raw.nameMat, raw.marka,
         raw.diam.replaceAll(cvsSpace, empty).toInt,
         raw.len.replaceAll(cvsSpace, empty).toInt,
@@ -51,7 +51,7 @@ trait OrigamiAggregator {
     }.onFailure { th ⇒ log.debug(s"IndexReader Failure: ${th.getMessage}"); Process.halt }
 
   def orderReader: scalaz.stream.Process[Task, Order] =
-    scalaz.stream.csv.rowsR[Order](path, ';')
+    scalaz.stream.csv.rowsR[Order](indexPath, ';')
       .onFailure { th ⇒ log.debug(s"OrderReader Failure: ${th.getMessage}"); Process.halt }
 
   def start(): Unit

@@ -9,7 +9,7 @@ name := "planner"
 
 version := "0.0.2-snapshot"
 
-scalaVersion := "2.11.6"
+scalaVersion := "2.11.7"
 
 parallelExecution := false
 parallelExecution in Test := false
@@ -57,7 +57,6 @@ resolvers ++= Seq(
   "oncue.bintray"          at "http://dl.bintray.com/oncue/releases"
 )
 
-//https://dl.bintray.com/oncue/releases/oncue/knobs/core_2.11/3.3.3/
 libraryDependencies ++= Seq(
   "log4j"               %   "log4j"                   %   "1.2.14",
   "oncue.knobs"         %%  "core"                    %   "3.3.3",

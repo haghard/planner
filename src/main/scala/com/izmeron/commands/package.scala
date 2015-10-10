@@ -17,6 +17,7 @@ package com.izmeron
 import com.izmeron.out.{OutputWriter, OutputModule}
 
 import scalaz.concurrent.Task
+import scalaz.effect.IO
 import scalaz.{ -\/, \/- }
 
 package object commands {
@@ -43,7 +44,7 @@ package object commands {
       new StaticCheck(path, minLenght, lenghtThreshold)
   }
 
-  final class StaticCheck(override val path: String, override val minLenght: Int,
+  final class StaticCheck(override val indexPath: String, override val minLenght: Int,
                           override val lenghtThreshold: Int) extends CliCommand with OrigamiAggregator {
     import StaticCheck._
     override val log = org.apache.log4j.Logger.getLogger("static-check")
@@ -75,15 +76,15 @@ package object commands {
       new Plan[T](path, outputDir, outFormat, minLenght, lenghtThreshold, writer)
   }
 
-  final class Plan[T <: OutputModule](override val path: String, outputDir: String, outFormat: String, override val minLenght: Int,
-                      override val lenghtThreshold: Int, writer: OutputWriter[T]) extends CliCommand with OrigamiAggregator
-  with ScalazFlowSupport {
+  final class Plan[T <: OutputModule](override val indexPath: String, outputDir: String, outFormat: String, override val minLenght: Int,
+                                      override val lenghtThreshold: Int, writer: OutputWriter[T]) extends CliCommand
+  with OrigamiAggregator with ScalazFlowSupport {
     import scalaz.stream.merge
     import scalaz.stream.async
 
     implicit val ex = PlannerEx
     implicit val CpuIntensive = scalaz.concurrent.Strategy.Executor(PlannerEx)
-
+    private val message = "Result has been written in file"
     override val log = org.apache.log4j.Logger.getLogger("planner")
 
     /**
@@ -104,8 +105,8 @@ package object commands {
     override def start(): Unit = {
       createIndex.runAsync {
         case \/-((\/-(index), None)) ⇒ {
+          log.info("Index has been created")
           println(Ansi.green("Index has been created"))
-          log.debug("Index has been created")
           Task.fork {
             val queue = async.boundedQueue[List[Result]](Math.pow(parallelism, 2).toInt)
             (inputReader(orderReader map (distribute(_, index)), queue).drain merge merge.mergeN(parallelism)(cuttingStock(queue)))
@@ -114,22 +115,31 @@ package object commands {
               .map(_.fold(writer.empty)(writer.convert))
           }.runAsync {
             case \/-(result) ⇒
-              writer.write(result, outputDir).unsafePerformIO()
-              println(Ansi.green(s"$result"))
+              val fileName = s"plan_${System.currentTimeMillis}.${outFormat}"
+              writer.write(result, s"$outputDir/$fileName").map { _ =>
+                val highlighted = fileName.replaceAll("(.+)", s"${Console.RED}$$1${Console.RESET}")
+                log.info(s"$message: $outputDir/$highlighted")
+                println(s"$message: $outputDir/$highlighted")
+              }.except { error =>
+                IO {
+                  log.info(s"${error.getClass.getName}: ${error.getStackTrace.mkString("\n")}: ${error.getMessage}")
+                  println(Ansi.red(s"${error.getClass.getName}: ${error.getStackTrace.mkString("\n")}: ${error.getMessage}"))
+                }
+              }.unsafePerformIO()
             case -\/(error) ⇒
               println(Ansi.red(s"${error.getClass.getName}: ${error.getStackTrace.mkString("\n")}: ${error.getMessage}"))
-              log.debug(s"${error.getClass.getName}: ${error.getStackTrace.mkString("\n")}: ${error.getMessage}")
+              log.info(s"${error.getClass.getName}: ${error.getStackTrace.mkString("\n")}: ${error.getMessage}")
           }
         }
         case -\/(ex) ⇒
+          log.info(s"${ex.getClass.getName}: ${ex.getStackTrace.mkString("\n")}: ${ex.getMessage}")
           println(Ansi.red(s"${ex.getClass.getName}: ${ex.getStackTrace.mkString("\n")}: ${ex.getMessage}"))
-          log.debug(s"${ex.getClass.getName}: ${ex.getStackTrace.mkString("\n")}: ${ex.getMessage}")
         case \/-((-\/(ex), None)) ⇒
+          log.info(s"Error while building index: ${ex.getMessage}")
           println(Ansi.red(s"Error while building index: ${ex.getMessage}"))
-          log.debug(s"Error while building index: ${ex.getMessage}")
         case \/-((_, Some(ex))) ⇒
+          log.info(s"Finalizer error while building index: ${ex.getMessage}")
           println(Ansi.red(s"Finalizer error while building index: ${ex.getMessage}"))
-          log.debug(s"Finalizer error while building index: ${ex.getMessage}")
       }
     }
   }
