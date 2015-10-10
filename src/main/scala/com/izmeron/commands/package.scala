@@ -79,7 +79,8 @@ package object commands {
       }(dispatcher)
     }
 
-    private def cutting(lenghtThreshold: Int, minLenght: Int, log: akka.event.LoggingAdapter) = Flow[List[Result]].buffer(1, akka.stream.OverflowStrategy.backpressure)
+    private def cutting(lenghtThreshold: Int, minLenght: Int, log: akka.event.LoggingAdapter) =
+      Flow[List[Result]].buffer(1, akka.stream.OverflowStrategy.backpressure)
       .map { list => cuttingStockProblem(list, lenghtThreshold, minLenght, log) }
 
     private def orderSource(orders: List[Order], index: mutable.Map[String, RawResult],
@@ -114,8 +115,12 @@ package object commands {
   }
 
   final class Plan[T <: OutputModule](override val indexPath: String, outputDir: String, outFormat: String, override val minLenght: Int,
-                      override val lenghtThreshold: Int, writer: OutputWriter[T]) extends CliCommand with Indexing {
+                                      override val lenghtThreshold: Int, writer: OutputWriter[T]) extends CliCommand with Indexing {
     import Plan._
+    import akka.pattern.ask
+    import scala.concurrent.duration._
+    implicit val timeout = akka.util.Timeout(360 seconds)
+
     override val log = system.log
     /**
      * Computation graph
@@ -132,32 +137,29 @@ package object commands {
      * |csv_line2 |---|distribute |--+                                             +------------+
      * +----------+   +-----------+
      */
-    override def start(): Unit = {
-      import scala.concurrent.duration._
-      //TODO: put timeout in config, write task latency
+    override def start() = {
+      //TODO: put timeout in config, write task latency !!!!!!!
       Await.ready(
         (indexedOrders.flatMap { case (orders, index) =>
-        val actor = (orderSource(orders, index, lenghtThreshold, minLenght, system.log) via cuttingFlow(lenghtThreshold, minLenght, system.log))
-          .runWith(Sink.actorSubscriber(Props(classOf[ResultAggregator[T]], lenghtThreshold, outputDir, outFormat, writer)))
-          import akka.pattern.ask
-          implicit val timeout = akka.util.Timeout(180 seconds)
-          val future = actor ? 'GetResult
-          future
+        (orderSource(orders, index, lenghtThreshold, minLenght, system.log) via cuttingFlow(lenghtThreshold, minLenght, system.log))
+          .runWith(Sink.actorSubscriber(Props(classOf[ResultAggregator[T]], lenghtThreshold, outputDir, outFormat, writer))) ? 'GetResult
         }).recoverWith {
           case e: Exception =>
             println(Ansi.red(e.getMessage))
             log.error(e.getMessage)
             Future.failed(e)
-        }, 185 seconds)
+        }, 365 seconds)
+
     }
   }
 
   class ResultAggregator[T <: OutputModule](lenghtThreshold: Int, outDir: String, outFormat:String, writer: OutputWriter[T]) extends ActorSubscriber {
-    override protected val requestStrategy = OneByOneRequestStrategy
     var acc = writer.Zero
     var requestor: Option[ActorRef] = None
     val message = "Result has been written in file"
     val exp = s"$message(.+)"
+    val start = System.currentTimeMillis
+    override protected val requestStrategy = OneByOneRequestStrategy
 
     override def receive: Receive = {
       case OnNext(cmbs: List[Combination]) =>
@@ -168,8 +170,8 @@ package object commands {
         val file = (message + path).replaceAll(exp, s"${Console.RED}$$1${Console.RESET}")
         println(s"$message: $file")
         val result = writer convert acc
-        //println(Ansi.green(result.toString))
         writer.write(result, s"$outDir/$path").unsafePerformIO()
+        println(s"Latency: ${Ansi.red((System.currentTimeMillis - start).toString)} mills")
         requestor.foreach(_ ! 'Ok)
         context.system.stop(self)
       case 'GetResult =>
