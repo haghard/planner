@@ -25,7 +25,7 @@ trait ScalazFlowSupport {
 
   def minLenght: Int
   def lenghtThreshold: Int
-  def log: org.apache.log4j.Logger
+  def log: org.apache.logging.log4j.Logger
 
   val loggerSink = scalaz.stream.sink.lift[Task, Iterable[Result]](list ⇒ Task.delay(log.debug(s"order-line: $list")))
 

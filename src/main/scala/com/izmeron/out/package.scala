@@ -16,11 +16,9 @@ package com.izmeron
 
 
 package object out {
-
   import scala.annotation.implicitNotFound
   import scalaz.effect.IO
   import java.io.{ PrintWriter, File }
-
 
   trait OutputModule {
     type From
@@ -92,8 +90,11 @@ package object out {
       override def convert(v: JsonOutputModule#From) = v.prettyPrint
 
       override def write(v: JsonOutputModule#To, outputFile: String): IO[Unit] = {
-        val out = new PrintWriter(new File(outputFile), enc)
-        IO { out.print(v.asInstanceOf[String]) }.ensuring(IO { out.close() })
+        IO {
+          val out = new PrintWriter(outputFile, enc)
+          out.print(v.asInstanceOf[String])
+          out
+        }.map(_.close())
       }
     }
 

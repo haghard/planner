@@ -14,6 +14,8 @@
 
 package com.izmeron
 
+import java.io.File
+
 import com.izmeron.out.{OutputWriter, OutputModule}
 
 import scalaz.concurrent.Task
@@ -37,8 +39,8 @@ package object commands {
   object StaticCheck {
     val ok = "Ok"
     val separator = ";"
-    val rule0 = "0. Max lenght rule violation"
-    val rule1 = "1. Multiplicity violation"
+    val rule0 = "0. Max lenght rule"
+    val rule1 = "1. Multiplicity rule"
 
     def apply(path: String, minLenght: Int, lenghtThreshold: Int) = new StaticCheck(path, minLenght, lenghtThreshold)
   }
@@ -46,25 +48,41 @@ package object commands {
   final class StaticCheck(override val indexPath: String, override val minLenght: Int,
                           override val lenghtThreshold: Int) extends CliCommand with OrigamiAggregator {
     import StaticCheck._
-    override val log = org.apache.log4j.Logger.getLogger("static-check")
+    override val log = org.apache.logging.log4j.LogManager.getLogger("static-check")
 
     override def start() = {
       maxLengthCheck.attemptRun.fold({ th: Throwable ⇒ println(s"${Ansi.errorMessage(th.getMessage)}") }, {
         case ((\/-(elem), None)) ⇒
           elem.fold(println(s"${Ansi.errorMessage("Can't perform check")}")) { maxLenElem ⇒
-            if (lenghtThreshold < maxLenElem.len) println(s"${Ansi.blueMessage(rule0)}: ${Ansi.errorMessage(s"Config value $lenghtThreshold but $maxLenElem has been found")}")
-            else println(s"${Ansi.blueMessage(rule0)}: ${Ansi.blueMessage(ok)}")
+            if (lenghtThreshold < maxLenElem.len) {
+              log.debug("{}: Config value {} but {} has been found", rule0, lenghtThreshold.toString, maxLenElem.toString)
+              println(s"${Ansi.blueMessage(rule0)}: ${Ansi.errorMessage(s"Config value $lenghtThreshold but $maxLenElem has been found")}")
+            } else {
+              log.debug("{}: {}", rule0, ok)
+              println(s"${Ansi.blueMessage(rule0)}: ${Ansi.blueMessage(ok)}")
+            }
           }
-        case ((-\/(ex)), None) ⇒ println(s"${Ansi.blueMessage(rule0)}: ${Ansi.errorMessage(ex.getMessage)}")
-        case other             ⇒ println(s"${Ansi.blueMessage(rule0)}: ${Ansi.errorMessage(other.toString())}")
+        case ((-\/(ex)), None) ⇒
+          println(s"${Ansi.blueMessage(rule0)}: ${Ansi.errorMessage(ex.getMessage)}")
+        case other             ⇒
+          println(s"${Ansi.blueMessage(rule0)}: ${Ansi.errorMessage(other.toString())}")
       })
 
       multiplicityCheck.attemptRun.fold({ th: Throwable ⇒ println(s"${Ansi.errorMessage(th.getMessage)}") }, {
         case ((\/-(list), None)) ⇒
-          if (list.isEmpty) println(s"${Ansi.blueMessage(rule1)}: ${Ansi.blueMessage(ok)}")
-          else println(s"${Ansi.blueMessage(rule1)}: ${Ansi.green(list.size.toString)}: ${Ansi.errorMessage(list.mkString(separator))}")
-        case ((-\/(ex)), None) ⇒ println(s"${Ansi.blueMessage(rule1)}: ${Ansi.errorMessage(ex.getMessage)}")
-        case other             ⇒ println(s"${Ansi.blueMessage(rule1)}: ${Ansi.errorMessage(other.toString())}")
+          if (list.isEmpty) {
+            log.debug("{}: {}", rule1, ok)
+            println(s"${Ansi.blueMessage(rule1)}: ${Ansi.blueMessage(ok)}")
+          } else {
+            log.debug("{}: {}: {}", rule1, list.size.toString, list.mkString(separator))
+            println(s"${Ansi.blueMessage(rule1)}: ${Ansi.green(list.size.toString)}: ${Ansi.errorMessage(list.mkString(separator))}")
+          }
+        case ((-\/(ex)), None) ⇒
+          log.debug("{}: {}", rule1, ex.getMessage)
+          println(s"${Ansi.blueMessage(rule1)}: ${Ansi.errorMessage(ex.getMessage)}")
+        case other             ⇒
+          log.debug("{}: {}", rule1, other.toString())
+          println(s"${Ansi.blueMessage(rule1)}: ${Ansi.errorMessage(other.toString())}")
       })
     }
   }
@@ -81,12 +99,12 @@ package object commands {
 
   final class Plan[T <: OutputModule](override val indexPath: String, outputDir: String, outFormat: String, override val minLenght: Int,
                                       override val lenghtThreshold: Int, writer: OutputWriter[T]) extends CliCommand
-  with OrigamiAggregator with ScalazFlowSupport {
+    with OrigamiAggregator with ScalazFlowSupport {
     import Plan._
     import scalaz.stream.merge
     import scalaz.stream.async
 
-    override val log = org.apache.log4j.Logger.getLogger("planner")
+    override val log = org.apache.logging.log4j.LogManager.getLogger("planner")
 
     /**
      * Computation graph
@@ -106,7 +124,7 @@ package object commands {
     override def start(): Unit = {
       createIndex.runAsync {
         case \/-((\/-(index), None)) ⇒ {
-          log.info("Index has been created")
+          log.debug("Index has been created")
           println(Ansi.green("Index has been created"))
           Task.fork {
             val queue = async.boundedQueue[List[Result]](Math.pow(parallelism, 2).toInt)
@@ -117,29 +135,36 @@ package object commands {
           }.runAsync {
             case \/-(result) ⇒
               val fileName = s"plan_${System.currentTimeMillis}.${outFormat}"
-              (writer write(result, s"$outputDir/$fileName")).map { _ =>
-                val highlighted = fileName.replaceAll("(.+)", s"${Console.RED}$$1${Console.RESET}")
-                log.info(s"$message: $outputDir/$highlighted")
-                println(s"$message: $outputDir/$highlighted")
+              IO {
+                val dir = new File(outputDir)
+                if (!dir.exists())
+                  dir.mkdirs()
+                ()
+              }.flatMap { _ =>
+                (writer write(result, s"$outputDir/$fileName")).map { _ =>
+                  val highlighted = fileName.replaceAll("(.+)", s"${Console.RED}$$1${Console.RESET}")
+                  log.debug("{}: {}", message, s"$outputDir/$highlighted")
+                  println(s"$message: $outputDir/$highlighted")
+                }
               }.except { error =>
                 IO {
-                  log.info(s"${error.getClass.getName}: ${error.getStackTrace.mkString("\n")}: ${error.getMessage}")
+                  log.debug("{}: {}: {}", error.getClass.getName, error.getStackTrace.mkString("\n"), error.getMessage)
                   println(Ansi.red(s"${error.getClass.getName}: ${error.getStackTrace.mkString("\n")}: ${error.getMessage}"))
                 }
               }.unsafePerformIO()
             case -\/(error) ⇒
               println(Ansi.red(s"${error.getClass.getName}: ${error.getStackTrace.mkString("\n")}: ${error.getMessage}"))
-              log.info(s"${error.getClass.getName}: ${error.getStackTrace.mkString("\n")}: ${error.getMessage}")
+              log.info(s"{}: {}: {}", error.getClass.getName, error.getStackTrace.mkString("\n"), error.getMessage)
           }
         }
         case -\/(ex) ⇒
-          log.info(s"${ex.getClass.getName}: ${ex.getStackTrace.mkString("\n")}: ${ex.getMessage}")
+          log.debug(s"{}: {}: {}", ex.getClass.getName, ex.getStackTrace.mkString("\n"), ex.getMessage)
           println(Ansi.red(s"${ex.getClass.getName}: ${ex.getStackTrace.mkString("\n")}: ${ex.getMessage}"))
         case \/-((-\/(ex), None)) ⇒
-          log.info(s"Error while building index: ${ex.getMessage}")
+          log.debug(s"Error while building index: {}", ex.getMessage)
           println(Ansi.red(s"Error while building index: ${ex.getMessage}"))
         case \/-((_, Some(ex))) ⇒
-          log.info(s"Finalizer error while building index: ${ex.getMessage}")
+          log.debug(s"Finalizer error while building index: {}", ex.getMessage)
           println(Ansi.red(s"Finalizer error while building index: ${ex.getMessage}"))
       }
     }

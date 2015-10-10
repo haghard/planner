@@ -32,7 +32,7 @@ trait OrigamiAggregator {
 
   def lenghtThreshold: Int
 
-  def log: org.apache.log4j.Logger
+  def log: org.apache.logging.log4j.Logger
 
   implicit val Codec: scala.io.Codec = scala.io.Codec.UTF8
 

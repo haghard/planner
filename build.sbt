@@ -37,6 +37,7 @@ enablePlugins(JavaAppPackaging)
 
 mainClass in Compile := Some("com.izmeron.Application")
 
+val Log4J2 = "2.4"
 val Origami = "1.0-20150902134048-8d00462"
 val localMvnRepo = "/Volumes/Data/dev_build_tools/apache-maven-3.1.1/repository"
 
@@ -58,14 +59,15 @@ resolvers ++= Seq(
 )
 
 libraryDependencies ++= Seq(
-  "log4j"               %   "log4j"                   %   "1.2.14",
   "oncue.knobs"         %%  "core"                    %   "3.3.3",
   "io.spray"            %%  "spray-json"              %   "1.3.2",
   "com.nrinaudo"        %%  "scalaz-stream-csv"       %   "0.1.3",
   "org.scala-sbt"       %   "completion"              %   "0.13.9",
   "info.folone"         %%  "poi-scala"               %   "0.15",
+  "org.apache.logging.log4j"  % "log4j-api"           %   Log4J2,
+  "org.apache.logging.log4j"  % "log4j-core"          %   Log4J2,
   "com.ambiata"         %%  "origami-core"            %   Origami,
-  "com.ambiata"         %%  "origami-stream"          %   Origami  exclude("com.google.caliper","caliper") exclude("com.google.guava", "guava")
+  "com.ambiata"         %%  "origami-stream"          %   Origami  exclude("com.google.caliper","caliper") exclude("com.google.guava", "guava") exclude("org.scala-lang.modules","scala-swing")
 )
 
 libraryDependencies ++= Seq(
@@ -73,6 +75,13 @@ libraryDependencies ++= Seq(
   "org.scalatest"     %%  "scalatest"         %   "2.2.5"   % "test",
   "org.scalacheck"    %%  "scalacheck"        %   "1.12.4"  % "test"
 )
+
+/*libraryDependencies ++= Seq(
+  "org.scala-lang" % "scala-library" % scalaVersion.value,
+  ("org.scala-lang" % "scala-compiler" % scalaVersion.value % "scala-tool")
+    .exclude("org.scala-lang.modules", s"scala-xml_${scalaBinaryVersion.value}")
+    .exclude("org.scala-lang.modules", s"scala-swing_${scalaBinaryVersion.value}")
+)*/
 
 scalacOptions ++= Seq(
   "-encoding", "UTF-8",
