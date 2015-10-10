@@ -14,6 +14,8 @@
 
 package com.izmeron
 
+import org.mockito.invocation.InvocationOnMock
+import org.mockito.stubbing.Answer
 import org.scalacheck._
 import Prop._
 
@@ -26,7 +28,14 @@ object CuttingStockProblemLaws extends Properties("CuttingStockProblemLaws") {
   val threshold = maxSize * maxNum
   val groupKey = "Сталь 38ХГМ-260-78"
 
-  val logger = org.apache.log4j.Logger.getLogger("cutting-stock-problem")
+  val logger = org.mockito.Mockito.mock(classOf[akka.event.LoggingAdapter])
+  org.mockito.Mockito.when(logger.debug(org.mockito.Matchers.anyString()))
+    .then(new Answer[Unit] {
+      override def answer(invocationOnMock: InvocationOnMock): Unit = {
+        val args = invocationOnMock.getArguments
+        println(args(0).toString)
+      }
+    })
 
   property("cutting-stock-problem") = forAll(
     Gen.containerOfN[List, Result](Size,
@@ -37,12 +46,10 @@ object CuttingStockProblemLaws extends Properties("CuttingStockProblemLaws") {
         detail ← Gen.choose(350, maxSize)
       } yield Result(new String(Array(k, d)), groupKey, detail, detail * size, size, size, 1, 1, 0)
     )) { list: List[Result] ⇒
-
       if (list.size == Size && !list.exists(_.kd == "")) {
-        logger.debug(s"in $count $list")
         count += 1
-        val combinations = cuttingStockProblem(list, threshold, minLenght, logger)
 
+        val combinations = cuttingStockProblem(list, threshold, minLenght, logger)
         val expectedLength = list./:(0)((acc, c) ⇒ acc + c.length * c.cQuantity)
 
         val sumLen = combinations.map(_.sheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).sum

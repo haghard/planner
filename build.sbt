@@ -10,6 +10,7 @@ name := "planner"
 version := "0.0.2-snapshot"
 
 scalaVersion := "2.11.7"
+val Akka = "2.4.0"
 
 parallelExecution := false
 parallelExecution in Test := false
@@ -59,14 +60,16 @@ libraryDependencies ++= Seq(
   "org.scala-sbt"       %   "completion"              %   "0.13.9",
   "info.folone"         %%  "poi-scala"               %   "0.15",
   "com.typesafe.akka"   %%  "akka-stream-experimental"%   "1.0",
-  "com.typesafe.akka"   %%  "akka-slf4j"               %   "2.4.0",
+  "com.typesafe.akka"   %%  "akka-slf4j"               %   Akka,
   "ch.qos.logback"      %   "logback-classic"          %   "1.1.2"
 )
 
 libraryDependencies ++= Seq(
   "org.specs2"        %%  "specs2-core"       %   "3.2"     % "test" withSources(),
   "org.scalatest"     %%  "scalatest"         %   "2.2.5"   % "test",
-  "org.scalacheck"    %%  "scalacheck"        %   "1.12.4"  % "test"
+  "org.scalacheck"    %%  "scalacheck"        %   "1.12.4"  % "test",
+  "com.typesafe.akka" %%  "akka-testkit"      %   Akka      % "test",
+  "org.mockito"       %  "mockito-core"      %   "1.10.19"
 )
 
 scalacOptions ++= Seq(

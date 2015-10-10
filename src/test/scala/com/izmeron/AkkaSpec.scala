@@ -1,8 +1,22 @@
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.izmeron
 
 import akka.actor.ActorSystem
-import akka.stream.{ActorMaterializer, ActorMaterializerSettings}
-import akka.stream.scaladsl.{ Source, Merge, FlowGraph}
+import akka.stream.{ ActorMaterializer, ActorMaterializerSettings }
+import akka.stream.scaladsl.{ Source, Merge, FlowGraph }
 import com.typesafe.config.ConfigFactory
 import org.specs2.mutable.Specification
 import scala.concurrent.Await
@@ -10,7 +24,6 @@ import scala.concurrent.Await
 class AkkaSpec extends Specification {
   val lenghtThreshold = 1800
   val minLenght = 400
-  val logger = org.apache.log4j.Logger.getLogger("test-planner")
 
   val dispCfg = ConfigFactory.parseString(
     """
@@ -41,27 +54,25 @@ class AkkaSpec extends Specification {
   implicit val materializer = ActorMaterializer(Settings)
   implicit val dispatcher = system.dispatchers.lookup("akka.flow-dispatcher")
 
+  def inner(order: Order): akka.stream.scaladsl.Source[String, Unit] = Source(List("a", "b", "c", "d", "e", "f", "g")) //(dispatcher))
 
-  def inner(order: Order): akka.stream.scaladsl.Source[String, Unit] = Source(List("a","b","c","d","e","f","g")) //(dispatcher))
+  val outer: akka.stream.scaladsl.Source[Order, Unit] =
+    Source(() ⇒ List(Order("a", 1), Order("b", 3), Order("c", 5), Order("d", 7), Order("e", 1), Order("f", 1)).iterator)
 
-  val outer:akka.stream.scaladsl.Source[Order, Unit] =
-    Source(() => List(Order("a", 1), Order("b", 3), Order("c", 5), Order("d", 7), Order("e", 1), Order("f", 1)).iterator)
-
-  def mapSource = outer.grouped(4).map { batch =>
-    Source() { implicit b =>
+  def mapSource = outer.grouped(4).map { batch ⇒
+    Source() { implicit b ⇒
       import FlowGraph.Implicits._
-      val innerSource = batch.map(order => inner(order).map(_.mkString(":")))
+      val innerSource = batch.map(order ⇒ inner(order).map(_.mkString(":")))
       val merge = b.add(Merge[String](batch.size))
       innerSource.foreach(_ ~> merge)
       merge.out
     }
   }.flatten(akka.stream.scaladsl.FlattenStrategy.concat[String])
 
-
   "Akka flow" should {
     "scenario0" in {
       import scala.concurrent.duration._
-      val r = Await.result(mapSource.runForeach { m => println(m) } , 5 seconds)
+      val r = Await.result(mapSource.runForeach { m ⇒ println(m) }, 5 seconds)
       println(r)
       1 === 1
     }
