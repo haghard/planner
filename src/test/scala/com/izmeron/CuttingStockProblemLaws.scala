@@ -26,7 +26,7 @@ object CuttingStockProblemLaws extends Properties("CuttingStockProblemLaws") {
   val threshold = maxSize * maxNum
   val groupKey = "Сталь 38ХГМ-260-78"
 
-  val logger = org.apache.log4j.Logger.getLogger("cutting-stock-problem")
+  val logger = org.apache.logging.log4j.LogManager.getLogger("cutting-stock-problem")
 
   property("cutting-stock-problem") = forAll(
     Gen.containerOfN[List, Result](Size,

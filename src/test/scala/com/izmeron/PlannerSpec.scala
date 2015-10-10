@@ -20,7 +20,7 @@ class PlannerSpec extends Specification {
   var lenghtThreshold = 1400
   val minLenght = 400
 
-  val logger = org.apache.log4j.Logger.getLogger("test-planner")
+  val logger = org.apache.logging.log4j.LogManager.getLogger("test-planner")
 
   "cuttingStockProblem" should {
     "scenario0" in {

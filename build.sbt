@@ -71,7 +71,7 @@ libraryDependencies ++= Seq(
 )
 
 libraryDependencies ++= Seq(
-  "org.specs2"        %%  "specs2-core"       %   "3.2"     % "test" withSources(),
+  "org.specs2"        %%  "specs2-core"       %   "3.6.4"   % "test" withSources(),
   "org.scalatest"     %%  "scalatest"         %   "2.2.5"   % "test",
   "org.scalacheck"    %%  "scalacheck"        %   "1.12.4"  % "test"
 )
