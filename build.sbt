@@ -7,7 +7,7 @@ organization := "com.izmeron"
 
 name := "planner"
 
-version := "0.0.2-snapshot"
+version := "0.0.2"
 
 scalaVersion := "2.11.7"
 
@@ -67,7 +67,7 @@ libraryDependencies ++= Seq(
   "org.apache.logging.log4j"  % "log4j-api"           %   Log4J2,
   "org.apache.logging.log4j"  % "log4j-core"          %   Log4J2,
   "com.ambiata"         %%  "origami-core"            %   Origami,
-  "com.ambiata"         %%  "origami-stream"          %   Origami  exclude("com.google.caliper","caliper") exclude("com.google.guava", "guava") exclude("org.scala-lang.modules","scala-swing")
+  "com.ambiata"         %%  "origami-stream"          %   Origami  exclude("com.google.caliper","caliper") exclude("com.google.guava", "guava")
 )
 
 libraryDependencies ++= Seq(
@@ -106,7 +106,7 @@ licenses += ("Apache-2.0", url("http://www.apache.org/licenses/"))
 
 bintrayOrganization in bintray := Some("haghard")
 
-repository in bintray := "snapshots" //"releases"
+repository in bintray := "releases" //"snapshots"
 
 publishMavenStyle := true
 //publishTo := Some(Resolver.file("file",  new File(localMvnRepo)))
