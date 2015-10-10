@@ -64,8 +64,10 @@ package object commands {
           }
         case ((-\/(ex)), None) ⇒
           println(s"${Ansi.blueMessage(rule0)}: ${Ansi.errorMessage(ex.getMessage)}")
+          log.debug("{} {}", rule0, lenghtThreshold.toString, ex.getMessage)
         case other             ⇒
           println(s"${Ansi.blueMessage(rule0)}: ${Ansi.errorMessage(other.toString())}")
+          log.debug("{} {}", rule0, other.toString)
       })
 
       multiplicityCheck.attemptRun.fold({ th: Throwable ⇒ println(s"${Ansi.errorMessage(th.getMessage)}") }, {

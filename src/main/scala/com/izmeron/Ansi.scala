@@ -26,11 +26,10 @@ object Ansi {
   def errorMessage(msg: String) =
     withAnsiCode(s"${Console.RED}${Console.BOLD}", msg)
 
-  def highlightTweet(msg: String): String = {
+  def highlight(msg: String): String =
     msg.
       replaceAll("(@[^\\s]+)", s"${Console.GREEN}$$1${Console.RESET}").
       replaceAll("(#[^\\s]+)", s"${Console.CYAN}$$1${Console.RESET}")
-  }
 
   def withAnsiCode(in: String, msg: String) = s"$in$msg${Console.RESET}"
 }
