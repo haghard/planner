@@ -40,8 +40,7 @@ package object commands {
     val rule0 = "0. Max lenght rule violation"
     val rule1 = "1. Multiplicity violation"
 
-    def apply(path: String, minLenght: Int, lenghtThreshold: Int): StaticCheck =
-      new StaticCheck(path, minLenght, lenghtThreshold)
+    def apply(path: String, minLenght: Int, lenghtThreshold: Int) = new StaticCheck(path, minLenght, lenghtThreshold)
   }
 
   final class StaticCheck(override val indexPath: String, override val minLenght: Int,
@@ -71,6 +70,10 @@ package object commands {
   }
 
   object Plan {
+    private val message = "Result has been written in file"
+    implicit val ex = PlannerEx
+    implicit val CpuIntensive = scalaz.concurrent.Strategy.Executor(PlannerEx)
+
     def apply[T <: OutputModule](path: String, outputDir: String, outFormat: String, minLenght: Int, lenghtThreshold: Int)
                                 (implicit writer: OutputWriter[T]) =
       new Plan[T](path, outputDir, outFormat, minLenght, lenghtThreshold, writer)
@@ -79,28 +82,26 @@ package object commands {
   final class Plan[T <: OutputModule](override val indexPath: String, outputDir: String, outFormat: String, override val minLenght: Int,
                                       override val lenghtThreshold: Int, writer: OutputWriter[T]) extends CliCommand
   with OrigamiAggregator with ScalazFlowSupport {
+    import Plan._
     import scalaz.stream.merge
     import scalaz.stream.async
 
-    implicit val ex = PlannerEx
-    implicit val CpuIntensive = scalaz.concurrent.Strategy.Executor(PlannerEx)
-    private val message = "Result has been written in file"
     override val log = org.apache.log4j.Logger.getLogger("planner")
 
     /**
      * Computation graph
      *
-     * File            Parallel stage                                         Parallel stage
-     * +----------+   +-----------+                                          +------------+
-     * |csv_line0 |---|distribute |--+                                  +----|cuttingStock|----+
-     * +----------+   +-----------+  |  Fan-in stage                    |    +------------+    |
-     * +----------+   +-----------+  |  +----------+  +-------------+   |    +------------+    |  +------------+   +-------+
-     * |csv_line1 |---|distribute |-----|foldMonoid|--|bounded queue|--------|cuttingStock|-------|monoidMapper|---|convert|
-     * +----------+   +-----------+  |  +----------+  +-------------+   |    +------------+    |  +------------+   +-------+
-     *                               |                                  |    +------------+    |
-     * +----------+   +-----------+  |                                  +----|cuttingStock|----+
-     * |csv_line2 |---|distribute |--+                                       +------------+
-     * +----------+   +-----------+
+     * File           Parallel stage                                         Parallel stage
+     * +----------+   +-------------+                                          +------------+
+     * |csv_line0 |---|distribute   |--+                                  +----|cuttingStock|----+
+     * +----------+   +-------------+  |  Fan-in stage                    |    +------------+    |
+     * +----------+   +-------------+  |  +----------+  +-------------+   |    +------------+    |  +------------+   +-------+
+     * |csv_line1 |---|distribute   |-----|foldMonoid|--|bounded queue|--------|cuttingStock|-------|monoidMapper|---|convert|
+     * +----------+   +-------------+  |  +----------+  +-------------+   |    +------------+    |  +------------+   +-------+
+     *                                 |                                  |    +------------+    |
+     * +----------+   +-------------+  |                                  +----|cuttingStock|----+
+     * |csv_line2 |---|distribute   |--+                                       +------------+
+     * +----------+   +-------------+
      */
     override def start(): Unit = {
       createIndex.runAsync {
@@ -116,7 +117,7 @@ package object commands {
           }.runAsync {
             case \/-(result) ⇒
               val fileName = s"plan_${System.currentTimeMillis}.${outFormat}"
-              writer.write(result, s"$outputDir/$fileName").map { _ =>
+              (writer write(result, s"$outputDir/$fileName")).map { _ =>
                 val highlighted = fileName.replaceAll("(.+)", s"${Console.RED}$$1${Console.RESET}")
                 log.info(s"$message: $outputDir/$highlighted")
                 println(s"$message: $outputDir/$highlighted")
