@@ -16,8 +16,6 @@
 
 package com.izmeron
 
-import java.util.concurrent.Executors._
-
 import com.izmeron.out.{ OutputWriter, JsonOutputModule }
 import org.http4s.dsl._
 import org.http4s.server.HttpService
@@ -54,6 +52,7 @@ object OrderService {
   private var aggregator: OrigamiAggregator with ScalazFlowSupport = _
   private val decodeUtf = scodec.stream.decode.many(scodec.codecs.utf8)
   private val queueSize = Math.pow(2, parallelism).toInt
+
   def apply(aggregator: OrigamiAggregator with ScalazFlowSupport,
             index: mutable.Map[String, RawResult],
             lenghtThreshold: Int, log: org.apache.log4j.Logger): HttpService = {
@@ -106,15 +105,16 @@ object OrderService {
         } yield r._2
       }).flatMap(P.emitAll)
 
-      val qWriter = ((req.body.flatMap(bVector ⇒ (decodeUtf decode bVector.toBitVector)) |> reqReader) to inputQueue.enqueue)
+      ((req.body.flatMap(bVector ⇒ (decodeUtf decode bVector.toBitVector)) |> reqReader) to inputQueue.enqueue)
         .onComplete(scalaz.stream.Process.eval_ { logger.debug(s"Orders input has been scheduled"); inputQueue.close })
-        .onFailure { th ⇒ logger.error(s"qWriter Error: ${th.getClass.getName}: ${th.getMessage}"); P.halt }.run[Task]
+        .onFailure { th ⇒ logger.error(s"qWriter Error: ${th.getClass.getName}: ${th.getMessage}"); P.halt }
+        .run[Task]
+        .runAsync(_ ⇒ ())
 
       val graph = ((aggregator.sourceToQueue(inputQueue.dequeue.map(aggregator.distribute(_, index)), queue)).drain merge merge.mergeN(parallelism)(aggregator.cuttingStock(queue)))
         .map { list ⇒ s"${writer.monoidMapper(lenghtThreshold, list).prettyPrint}\n" } ++ P.emit(s"""{ "latency": ${System.currentTimeMillis - start} }""")
         .onFailure { th ⇒ logger.error(s"Error: ${th.getClass.getName}: ${th.getMessage}"); P.emit(s"{ Error: ${th.getClass.getName}: ${th.getMessage}}") }
 
-      qWriter.runAsync(_ ⇒ ())
       Ok(graph).chunked
   }
 }
