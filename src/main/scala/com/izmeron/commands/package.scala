@@ -84,8 +84,8 @@ package object commands {
       .map { list => cuttingStockProblem(list, lenghtThreshold, minLenght, log) }
 
     private def orderSource(orders: List[Order], index: mutable.Map[String, RawResult],
-                          lenghtThreshold: Int, minLenght: Int, log: akka.event.LoggingAdapter)
-                          (implicit dispatcher: scala.concurrent.ExecutionContext) =
+                            lenghtThreshold: Int, minLenght: Int, log: akka.event.LoggingAdapter)
+                            (implicit dispatcher: scala.concurrent.ExecutionContext) =
       Source(orders).grouped(parallelism).map { ords =>
         Source() { implicit b =>
           import FlowGraph.Implicits._
