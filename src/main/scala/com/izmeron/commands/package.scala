@@ -137,8 +137,7 @@ package object commands {
      * |csv_line2 |---|distribute |--+                                             +------------+
      * +----------+   +-----------+
      */
-    override def start() = {
-      //TODO: put timeout in config, write task latency !!!!!!!
+    override def start() =
       Await.ready(
         (indexedOrders.flatMap { case (orders, index) =>
         (orderSource(orders, index, lenghtThreshold, minLenght, system.log) via cuttingFlow(lenghtThreshold, minLenght, system.log))
@@ -149,8 +148,6 @@ package object commands {
             log.error(e.getMessage)
             Future.failed(e)
         }, 365 seconds)
-
-    }
   }
 
   class ResultAggregator[T <: OutputModule](lenghtThreshold: Int, outDir: String, outFormat:String, writer: OutputWriter[T]) extends ActorSubscriber {
