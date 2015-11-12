@@ -15,6 +15,7 @@
 package com.izmeron
 
 import akka.actor.{ActorRef, Props}
+import akka.stream.{SourceShape, FlowShape}
 import akka.stream.actor.ActorSubscriberMessage.{OnComplete, OnNext}
 import akka.stream.actor.{OneByOneRequestStrategy, ActorSubscriber}
 import akka.stream.scaladsl._
@@ -87,7 +88,8 @@ package object commands {
                             lenghtThreshold: Int, minLenght: Int, log: akka.event.LoggingAdapter)
                             (implicit dispatcher: scala.concurrent.ExecutionContext) =
       Source(orders).grouped(parallelism).map { ords =>
-        Source() { implicit b =>
+        Source.fromGraph(
+          FlowGraph.create() { implicit b =>
           import FlowGraph.Implicits._
           val groupSource = ords.map { order =>
             innerSource(order, index, lenghtThreshold, minLenght, log)
@@ -95,19 +97,20 @@ package object commands {
           }
           val merge = b.add(Merge[Map[String, List[Result]]](ords.size))
           groupSource.foreach(_ ~> merge)
-          merge.out
-        }
-      }.flatten(akka.stream.scaladsl.FlattenStrategy.concat[Map[String, List[Result]]])
+            SourceShape(merge.out)
+        })
+      }.flatMapConcat(identity)
         .fold(M.zero)((acc,c) => M.append(acc,c))
         .mapConcat(_.values.toList)
 
-    private def cuttingFlow(lenghtThreshold: Int, minLenght: Int, log: akka.event.LoggingAdapter) = Flow() { implicit b =>
-      import FlowGraph.Implicits._
-      val balancer = b.add(Balance[List[Result]](parallelism))
-      val merge = b.add(Merge[List[Combination]](parallelism))
-      (0 until parallelism).foreach { _ => balancer ~> cutting(lenghtThreshold, minLenght, log) ~> merge }
-      (balancer.in, merge.out)
-    }
+    private def cuttingFlow(lenghtThreshold: Int, minLenght: Int, log: akka.event.LoggingAdapter) =
+      FlowGraph.create() { implicit b =>
+        import FlowGraph.Implicits._
+        val balancer = b.add(Balance[List[Result]](parallelism))
+        val merge = b.add(Merge[List[Combination]](parallelism))
+        (0 until parallelism).foreach { _ => balancer ~> cutting(lenghtThreshold, minLenght, log) ~> merge }
+        FlowShape(balancer.in, merge.out)
+      }
 
     def apply[T <: OutputModule](path: String, outputDir: String, outFormat: String, minLenght: Int, lenghtThreshold: Int)
                                 (implicit writer: OutputWriter[T]) =
@@ -130,7 +133,7 @@ package object commands {
      * |csv_line0 |---|distribute |--+                                          +- |cuttingStock|----+
      * +----------+   +-----------+  |  Fan-in stage                            |  +------------+    |
      * +----------+   +-----------+  | +------+  +-----------------+  +-------+ |  +------------+    |   +-----+   +----------+
-     * |csv_line1 |---|distribute |----|Merge |--|flatten/mapConcat|--|Balance|----|cuttingStock |-------|Merge|---|Sink actor|
+     * |csv_line1 |---|distribute |----|Merge |--|flatMapConcat    |--|Balance|----|cuttingStock |-------|Merge|---|Sink actor|
      * +----------+   +-----------+  | +------+  +-----------------+  +-------+ |  +------------+    |   +-----+   +----------+
      *                               |                                          |  +------------+    |
      * +----------+   +-----------+  |                                          +--|cuttingStock|----+
@@ -153,7 +156,7 @@ package object commands {
   class ResultAggregator[T <: OutputModule](lenghtThreshold: Int, outDir: String, outFormat:String, writer: OutputWriter[T]) extends ActorSubscriber {
     var acc = writer.Zero
     var requestor: Option[ActorRef] = None
-    val message = "Result has been written in file"
+    val message = "The result has been written in the file"
     val exp = s"$message(.+)"
     val start = System.currentTimeMillis
     override protected val requestStrategy = OneByOneRequestStrategy
@@ -163,12 +166,12 @@ package object commands {
         acc = writer.monoid.append(acc, writer.monoidMapper(lenghtThreshold, cmbs))
 
       case OnComplete =>
-        val path = s"plan_${System.currentTimeMillis()}.${outFormat}"
+        val path = s"plan_${System.currentTimeMillis}.$outFormat"
         val file = (message + path).replaceAll(exp, s"${Console.RED}$$1${Console.RESET}")
         println(s"$message: $file")
         val result = writer convert acc
         writer.write(result, s"$outDir/$path").unsafePerformIO()
-        println(s"Latency: ${Ansi.red((System.currentTimeMillis - start).toString)} mills")
+        println(s"The latency: ${Ansi.red((System.currentTimeMillis - start).toString)} mills")
         requestor.foreach(_ ! 'Ok)
         context.system.stop(self)
       case 'GetResult =>
