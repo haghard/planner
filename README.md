@@ -1,4 +1,4 @@
-Planner
+Planner for cutting stoke problem
 ===================
 
 

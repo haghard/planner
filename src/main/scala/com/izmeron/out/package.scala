@@ -14,13 +14,10 @@
 
 package com.izmeron
 
-
 package object out {
-
   import scala.annotation.implicitNotFound
   import scalaz.effect.IO
   import java.io.{ PrintWriter, File }
-
 
   trait OutputModule {
     type From
@@ -37,7 +34,6 @@ package object out {
     type To = info.folone.scala.poi.Workbook
   }
 
-
   @implicitNotFound(msg = "Cannot find OutputWriter type class for ${T}")
   trait OutputWriter[T <: OutputModule] {
     def empty: T#To
@@ -47,7 +43,6 @@ package object out {
     def monoidMapper: (Int, List[Combination]) ⇒ T#From
     def Zero: T#From
   }
-
 
   object OutputWriter {
     import spray.json.{ JsArray, JsNumber, JsString, _ }

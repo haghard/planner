@@ -108,7 +108,8 @@ object http {
                 val sink = Sink[List[Combination]](sub)
                 val pub = ActorPublisher[ByteString](streamer)
                 val source = Source[ByteString](pub)
-                (plannerSource(req, index, lenghtThreshold, minLenght, sys.log) via cuttingGraph(lenghtThreshold, minLenght, sys.log)).runWith(sink)
+                ((plannerSource(req, index, lenghtThreshold, minLenght, sys.log) via cuttingGraph(lenghtThreshold, minLenght, sys.log))
+                  runWith sink)
                 HttpResponse(entity = HttpEntity.Chunked.fromData(ContentTypes.`application/json`, source))
               }
             }
@@ -121,71 +122,70 @@ object http {
 
   class Streamer(lenghtThreshold: Int, MaxBufferSize: Int, writer: OutputWriter[JsonOutputModule])
       extends ActorSubscriber with ActorPublisher[ByteString] with ActorLogging {
-    private val buffer = mutable.Queue[ByteString]()
+    private val queue = mutable.Queue[ByteString]()
     private var read = false
     val start = System.currentTimeMillis()
     override protected val requestStrategy = new MaxInFlightRequestStrategy(MaxBufferSize) {
-      override def inFlightInternally = buffer.size
+      override def inFlightInternally = queue.size
     }
 
-    private val waitingRead: Receive = {
+    private val waitLastChunk: Receive = {
       case ActorPublisherMessage.Request(n) ⇒
-        //log.debug(s"Request $n")
         loop(n)
-        //log.debug(s"completed with buffer:${buffer.size}")
-        context.stop(self)
+        (context stop self)
 
       case ActorPublisherMessage.SubscriptionTimeoutExceeded ⇒
         onComplete()
-        context.stop(self)
+        (context stop self)
 
       case ActorPublisherMessage.Cancel ⇒
-        log.debug("client has been canceled")
+        log.debug("client has closed the connection")
         cancel()
-        context.stop(self)
+        (context stop self)
     }
 
     override def receive: Receive = {
       case OnNext(cmbs: List[Combination]) ⇒
         //log.info(s"Queue:${buffer.size} Demand:$totalDemand")
-        val line = writer.convert(writer.monoidMapper(lenghtThreshold, cmbs))
-        buffer += ByteString(line)
+        val line = writer.convert(writer monoidMapper(lenghtThreshold, cmbs))
+        queue += ByteString(line)
         if (totalDemand > 0)
           loop(totalDemand)
 
       case OnComplete ⇒
         flush
-        onNext(ByteString(s""" "latency": ${System.currentTimeMillis() - start} """))
-        if (read) context.system.stop(self)
+        onNext(ByteString(s"""latency: ${System.currentTimeMillis - start}"""))
+        if (read) (context stop self)
         //log.debug(s"completed with buffer:${buffer.size}")
-        else (context become waitingRead)
+        else (context become waitLastChunk)
 
       case OnError(ex) ⇒
         log.debug(s"onError: ${ex.getMessage}")
         onError(ex)
 
       case ActorPublisherMessage.Request(n) ⇒
+        //we just relay on totalDemand
 
       case ActorPublisherMessage.SubscriptionTimeoutExceeded ⇒
         onComplete()
-        context.stop(self)
+        (context stop self)
 
       case ActorPublisherMessage.Cancel ⇒
-        log.debug("client has been canceled")
+        log.debug("client has closed the connection")
         cancel()
-        context.stop(self)
+        (context stop self)
     }
 
     def flush = {
-      if ((isActive && totalDemand > 0) && !buffer.isEmpty) {
-        onNext(buffer.dequeue())
+      if ((isActive && totalDemand > 0) && !queue.isEmpty) {
+        onNext(queue.dequeue)
       }
     }
 
     def loop(n: Long) = {
       @tailrec def go(n: Long): Long = {
-        if ((isActive && totalDemand > 0) && !buffer.isEmpty) {
-          onNext(buffer.dequeue())
+        if ((isActive && totalDemand > 0) && !queue.isEmpty) {
+          onNext(queue.dequeue())
           go(n - 1)
         } else n
       }
