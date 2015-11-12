@@ -19,7 +19,7 @@ import akka.http.scaladsl.Http
 import akka.http.scaladsl.Http.ServerBinding
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.server.Directives._
-import akka.stream.{ OverflowStrategy, ActorMaterializer }
+import akka.stream.{ FlowShape, SourceShape, OverflowStrategy, ActorMaterializer }
 import akka.stream.actor._
 import akka.stream.io.Framing
 import akka.stream.scaladsl._
@@ -46,8 +46,8 @@ object http {
     }
 
     private def innerSource(order: Order, index: mutable.Map[String, RawResult],
-                    lenghtThreshold: Int, minLenght: Int,
-                    log: akka.event.LoggingAdapter)(implicit ctx: scala.concurrent.ExecutionContext) = Source {
+                            lenghtThreshold: Int, minLenght: Int,
+                            log: akka.event.LoggingAdapter)(implicit ctx: scala.concurrent.ExecutionContext) = Source {
       Future {
         index.get(order.kd).fold(List.empty[Result]) { raw ⇒
           distributeWithinGroup(lenghtThreshold, minLenght, log)(groupByOptimalNumber(order, lenghtThreshold, minLenght, log)(raw))
@@ -62,7 +62,7 @@ object http {
                               lenghtThreshold: Int, minLenght: Int, log: LoggingAdapter)(implicit ctx: scala.concurrent.ExecutionContext) =
       req.entity.dataBytes.via(Framing.delimiter(sep, Int.MaxValue, true).map(parseOrder))
         .grouped(parallelism).map { ords ⇒
-          Source() { implicit b ⇒
+          Source.fromGraph(FlowGraph.create() { implicit b ⇒
             import FlowGraph.Implicits._
             val groupSource = ords.map { order ⇒
               innerSource(order, index, lenghtThreshold, minLenght, log)(ctx)
@@ -70,21 +70,21 @@ object http {
             }
             val merge = b.add(Merge[Map[String, List[Result]]](ords.size))
             groupSource.foreach(_ ~> merge)
-            merge.out
-          }
-        }.flatten(akka.stream.scaladsl.FlattenStrategy.concat[Map[String, List[Result]]])
+            SourceShape(merge.out)
+          })
+        }.flatMapConcat(identity)
         .fold(M.zero)((acc, c) ⇒ M.append(acc, c))
         .mapConcat(_.values.toList)
 
     private def cuttingGraph(lenghtThreshold: Int, minLenght: Int, log: LoggingAdapter) =
-      Flow() { implicit b ⇒
+      FlowGraph.create() { implicit b ⇒
         import FlowGraph.Implicits._
         val balancer = b.add(Balance[List[Result]](parallelism))
         val merge = b.add(Merge[List[Combination]](parallelism))
         for (i ← 0 until parallelism) {
           balancer ~> cutting(lenghtThreshold, minLenght, log) ~> merge
         }
-        (balancer.in, merge.out)
+        FlowShape(balancer.in, merge.out)
       }
 
     //http POST http://127.0.0.1:8001/orders < ./csv/metal2pipes2.csv Accept:application/json --stream
@@ -122,10 +122,10 @@ object http {
   class Streamer(lenghtThreshold: Int, bufferSize: Int, writer: OutputWriter[JsonOutputModule])
       extends ActorSubscriber with ActorPublisher[ByteString] with ActorLogging {
     private val buffer = mutable.Queue[ByteString]()
-    private var readed = false
+    private var read = false
     val start = System.currentTimeMillis()
     override protected val requestStrategy = new MaxInFlightRequestStrategy(bufferSize) {
-      override val inFlightInternally = buffer.size
+      override def inFlightInternally = buffer.size
     }
 
     private val waitingRead: Receive = {
@@ -156,7 +156,7 @@ object http {
       case OnComplete ⇒
         flush
         onNext(ByteString(s""" "latency": ${System.currentTimeMillis() - start} """))
-        if (readed) context.system.stop(self)
+        if (read) context.system.stop(self)
         //log.debug(s"completed with buffer:${buffer.size}")
         else (context become waitingRead)
 
@@ -189,7 +189,7 @@ object http {
           go(n - 1)
         } else n
       }
-      readed = true
+      read = true
       go(n)
     }
   }
