@@ -102,8 +102,8 @@ object http {
           post {
             extractRequest { req ⇒
               complete {
-                val bufferSize = mat.settings.initialInputBufferSize
-                val streamer = sys.actorOf(Props(classOf[Streamer], lenghtThreshold, bufferSize, writer).withDispatcher("akka.planner"))
+                val MaxBufferSize = mat.settings.maxInputBufferSize
+                val streamer = sys.actorOf(Props(classOf[Streamer], lenghtThreshold, MaxBufferSize, writer).withDispatcher("akka.planner"))
                 val sub = ActorSubscriber[List[Combination]](streamer)
                 val sink = Sink[List[Combination]](sub)
                 val pub = ActorPublisher[ByteString](streamer)
@@ -119,12 +119,12 @@ object http {
     }
   }
 
-  class Streamer(lenghtThreshold: Int, bufferSize: Int, writer: OutputWriter[JsonOutputModule])
+  class Streamer(lenghtThreshold: Int, MaxBufferSize: Int, writer: OutputWriter[JsonOutputModule])
       extends ActorSubscriber with ActorPublisher[ByteString] with ActorLogging {
     private val buffer = mutable.Queue[ByteString]()
     private var read = false
     val start = System.currentTimeMillis()
-    override protected val requestStrategy = new MaxInFlightRequestStrategy(bufferSize) {
+    override protected val requestStrategy = new MaxInFlightRequestStrategy(MaxBufferSize) {
       override def inFlightInternally = buffer.size
     }
 
