@@ -32,3 +32,9 @@ plan  ./csv/metal2pipes2.csv --out json
 
 plan  ./csv/metal2pipes2.csv --out excel
 ```
+
+
+How to build
+======================
+
+sbt stage
