@@ -48,11 +48,11 @@ trait OrigamiAggregator {
         raw.numSect.replaceAll(cvsSpace, empty).toInt,
         raw.numPart.replaceAll(cvsSpace, empty).toInt,
         raw.techComp.replaceAll(cvsSpace, empty).toInt)
-    }.onFailure { th ⇒ log.debug(s"IndexReader Failure: ${th.getMessage}"); Process.halt }
+    }.onFailure { th ⇒ log.debug(s"IndexReader failure: ${th.getMessage}"); Process.halt }
 
   def orderReader: scalaz.stream.Process[Task, Order] =
     scalaz.stream.csv.rowsR[Order](indexPath, ';')
-      .onFailure { th ⇒ log.debug(s"OrderReader Failure: ${th.getMessage}"); Process.halt }
+      .onFailure { th ⇒ log.debug(s"OrderReader failure: ${th.getMessage}"); Process.halt }
 
   def start(): Unit
 
