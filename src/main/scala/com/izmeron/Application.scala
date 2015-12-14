@@ -55,13 +55,11 @@ object Application extends App {
     }
   }
 
-  private def parseLine[U](line: String, parser: Parser[U]): Option[U] = {
-    val parsed = Parser.parse(line, parser)
-    parsed match {
+  private def parseLine[U](line: String, parser: Parser[U]): Option[U] =
+    Parser.parse(line, parser) match {
       case Right(value) ⇒ Some(value)
       case Left(e)      ⇒ None
     }
-  }
 
   def runCli(lenghtThreshold: Int, minLenght: Int, outputDir: String): Unit = {
     def readCommand(): Option[CliCommand] = readLine(cliParser(lenghtThreshold, minLenght, outputDir))
