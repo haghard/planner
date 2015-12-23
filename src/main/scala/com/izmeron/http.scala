@@ -35,7 +35,6 @@ import scala.concurrent.Future
 object http {
   object Server {
     import scalaz.std.AllInstances._
-    val S = implicitly[scalaz.Semigroup[String]]
     val M = implicitly[scalaz.Monoid[Map[String, List[Result]]]]
 
     val sep = ByteString("\n")
@@ -47,7 +46,7 @@ object http {
 
     private def innerSource(order: Order, index: mutable.Map[String, RawResult],
                             lenghtThreshold: Int, minLenght: Int,
-                            log: akka.event.LoggingAdapter)(implicit ctx: scala.concurrent.ExecutionContext) = Source {
+                            log: akka.event.LoggingAdapter)(implicit ctx: scala.concurrent.ExecutionContext) = Source.fromFuture {
       Future {
         index.get(order.kd).fold(List.empty[Result]) { raw ⇒
           distributeWithinGroup(lenghtThreshold, minLenght, log)(groupByOptimalNumber(order, lenghtThreshold, minLenght, log)(raw))
@@ -62,8 +61,8 @@ object http {
                               lenghtThreshold: Int, minLenght: Int, log: LoggingAdapter)(implicit ctx: scala.concurrent.ExecutionContext) =
       req.entity.dataBytes.via(Framing.delimiter(sep, Int.MaxValue, true).map(parseOrder))
         .grouped(parallelism).map { ords ⇒
-          Source.fromGraph(FlowGraph.create() { implicit b ⇒
-            import FlowGraph.Implicits._
+          Source.fromGraph(GraphDSL.create() { implicit b ⇒
+            import GraphDSL.Implicits._
             val groupSource = ords.map { order ⇒
               innerSource(order, index, lenghtThreshold, minLenght, log)(ctx)
                 .map(list ⇒ list.headOption.fold(Map[String, List[Result]]())(head ⇒ Map(head.groupKey -> list)))
@@ -77,8 +76,8 @@ object http {
         .mapConcat(_.values.toList)
 
     private def cuttingGraph(lenghtThreshold: Int, minLenght: Int, log: LoggingAdapter) =
-      FlowGraph.create() { implicit b ⇒
-        import FlowGraph.Implicits._
+      GraphDSL.create() { implicit b ⇒
+        import GraphDSL.Implicits._
         val balancer = b.add(Balance[List[Result]](parallelism))
         val merge = b.add(Merge[List[Combination]](parallelism))
         for (i ← 0 until parallelism) {
@@ -103,11 +102,11 @@ object http {
             extractRequest { req ⇒
               complete {
                 val MaxBufferSize = mat.settings.maxInputBufferSize
-                val streamer = sys.actorOf(Props(classOf[Streamer], lenghtThreshold, MaxBufferSize, writer).withDispatcher("akka.planner"))
+                val streamer = sys.actorOf(Props(classOf[ResponseStreamer], lenghtThreshold, MaxBufferSize, writer).withDispatcher("akka.planner"))
                 val sub = ActorSubscriber[List[Combination]](streamer)
-                val sink = Sink[List[Combination]](sub)
+                val sink = Sink.fromSubscriber[List[Combination]](sub)
                 val pub = ActorPublisher[ByteString](streamer)
-                val source = Source[ByteString](pub)
+                val source = Source.fromPublisher[ByteString](pub)
                 ((plannerSource(req, index, lenghtThreshold, minLenght, sys.log) via cuttingGraph(lenghtThreshold, minLenght, sys.log))
                   runWith sink)
                 HttpResponse(entity = HttpEntity.Chunked.fromData(ContentTypes.`application/json`, source))
@@ -120,7 +119,7 @@ object http {
     }
   }
 
-  class Streamer(lenghtThreshold: Int, MaxBufferSize: Int, writer: OutputWriter[JsonOutputModule])
+  class ResponseStreamer(lenghtThreshold: Int, MaxBufferSize: Int, writer: OutputWriter[JsonOutputModule])
       extends ActorSubscriber with ActorPublisher[ByteString] with ActorLogging {
     private val queue = mutable.Queue[ByteString]()
     private var read = false
@@ -147,7 +146,7 @@ object http {
     override def receive: Receive = {
       case OnNext(cmbs: List[Combination]) ⇒
         //log.info(s"Queue:${buffer.size} Demand:$totalDemand")
-        val line = writer.convert(writer monoidMapper(lenghtThreshold, cmbs))
+        val line = writer.convert(writer monoidMapper (lenghtThreshold, cmbs))
         queue += ByteString(line)
         if (totalDemand > 0)
           loop(totalDemand)
@@ -164,7 +163,7 @@ object http {
         onError(ex)
 
       case ActorPublisherMessage.Request(n) ⇒
-        //we just relay on totalDemand
+      //we just relay on totalDemand
 
       case ActorPublisherMessage.SubscriptionTimeoutExceeded ⇒
         onComplete()
@@ -194,26 +193,3 @@ object http {
     }
   }
 }
-
-/*
-val requestHandler: HttpRequest ⇒ HttpResponse = {
-    case HttpRequest(GET, Uri.Path("/"), _, _, _) ⇒
-      val dir = "/test-data/"
-      println(s"\r\n handling request")
-      val s = Source(files.listFiles().filter(_.getName().endsWith(".txt")).toIterator) map { file =>
-        println(s"\r\n reading file ${file.getName}")
-        java.nio.file.Files.readAllBytes(Paths.get(file.getAbsolutePath))
-      } map { byteArray =>
-        println(s"\r\n getting bytes ${byteArray.length}")
-        new GzipCompressor().compress(ByteString(byteArray))
-      }
-      HttpResponse(entity = HttpEntity.Chunked.fromData(MediaTypes.`application/x-gzip`, s))
-    case _: HttpRequest ⇒ HttpResponse(404, entity = "Unknown resource!")
-  }
-  streamingServer foreach { case Http.ServerBinding(localAddress, connectionStream) =>
-    Source(connectionStream) foreach { case Http.IncomingConnection(remoteAddress, requestProducer, responseConsumer) =>
-      println(s"\r\n Accepted new connection from $remoteAddress")
-      Source(requestProducer).map(requestHandler).to(Sink(responseConsumer)).run()
-    }
-  }
- */ 

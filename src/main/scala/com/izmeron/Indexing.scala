@@ -17,7 +17,7 @@ package com.izmeron
 import java.io.FileInputStream
 import akka.actor.ActorSystem
 import akka.stream.io.Framing
-import akka.stream.scaladsl.Source
+import akka.stream.scaladsl.StreamConverters
 import akka.util.ByteString
 import akka.stream.{ ActorMaterializerSettings, ActorMaterializer, Supervision, ActorAttributes }
 import com.typesafe.config.Config
@@ -26,7 +26,6 @@ import scala.collection.mutable
 import scala.concurrent.Future
 
 trait Indexing {
-  import akka.stream.io.Implicits._
 
   def minLenght: Int
   def indexPath: String
@@ -40,8 +39,8 @@ trait Indexing {
     .withInputBuffer(initialSize = 128, maxSize = 256)
     .withDispatcher("akka.planner")
 
-  implicit lazy val materializer = ActorMaterializer(Settings)
-  implicit lazy val dispatcher = system.dispatchers.lookup("akka.planner")
+  implicit lazy val materializer: ActorMaterializer = ActorMaterializer(Settings)
+  implicit lazy val dispatcher = materializer.executionContext
 
   def parseCsv(bs: ByteString): Etalon = {
     val items = bs.utf8String.split(';')
@@ -78,7 +77,7 @@ trait Indexing {
   }
 
   def createFileIndex: Future[mutable.Map[String, RawResult]] = {
-    (Source.inputStream(() ⇒ new FileInputStream(indexPath)) via Framing.delimiter(sep, Int.MaxValue, true))
+    (StreamConverters.fromInputStream(() ⇒ new FileInputStream(indexPath)) via Framing.delimiter(sep, Int.MaxValue, true))
       .map(parseCsv)
       .withAttributes(ActorAttributes.supervisionStrategy(_ ⇒ Supervision.Stop))
       .runFold(mutable.Map[String, RawResult]()) { (acc, c) ⇒
@@ -89,7 +88,7 @@ trait Indexing {
   }
 
   private def readOrders: Future[List[Order]] = {
-    (Source.inputStream(() ⇒ new FileInputStream(indexPath)) via Framing.delimiter(sep, Int.MaxValue, true))
+    (StreamConverters.fromInputStream(() ⇒ new FileInputStream(indexPath)) via Framing.delimiter(sep, Int.MaxValue, true))
       .map(parseOrder)
       .withAttributes(ActorAttributes.supervisionStrategy(_ ⇒ Supervision.Stop))
       .runFold(List[Order]())((acc, c) ⇒ c :: acc)
@@ -98,13 +97,13 @@ trait Indexing {
   def indexedOrders: Future[(List[Order], mutable.Map[String, RawResult])] = (readOrders zip createFileIndex)
 
   def maxLengthCheck: Future[Int] =
-    (Source.inputStream(() ⇒ new FileInputStream(indexPath)) via Framing.delimiter(sep, Int.MaxValue, true))
+    (StreamConverters.fromInputStream(() ⇒ new FileInputStream(indexPath)) via Framing.delimiter(sep, Int.MaxValue, true))
       .map(parseLen)
       .withAttributes(ActorAttributes.supervisionStrategy(_ ⇒ Supervision.Stop))
       .runFold(0)((acc, c) ⇒ if (acc > c) acc else c)
 
   def multiplicity: Future[List[String]] =
-    (Source.inputStream(() ⇒ new FileInputStream(indexPath)) via Framing.delimiter(sep, Int.MaxValue, true))
+    (StreamConverters.fromInputStream(() ⇒ new FileInputStream(indexPath)) via Framing.delimiter(sep, Int.MaxValue, true))
       .map(parseView)
       .withAttributes(ActorAttributes.supervisionStrategy(_ ⇒ Supervision.Stop))
       .runFold(List[String]()) { (acc, c) ⇒
