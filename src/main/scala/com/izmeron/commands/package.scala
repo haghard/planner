@@ -73,7 +73,7 @@ package object commands {
 
     def innerSource(order: Order, index: mutable.Map[String, RawResult],
                     lenghtThreshold: Int, minLenght: Int, log: akka.event.LoggingAdapter)
-                   (implicit dispatcher: scala.concurrent.ExecutionContext) = Source {
+                   (implicit dispatcher: scala.concurrent.ExecutionContext) = Source.fromFuture {
       Future {
         val raw = index(order.kd)
         distributeWithinGroup(lenghtThreshold, minLenght, log)(groupByOptimalNumber(order, lenghtThreshold, minLenght, log)(raw))
@@ -89,8 +89,8 @@ package object commands {
                             (implicit dispatcher: scala.concurrent.ExecutionContext) =
       Source(orders).grouped(parallelism).map { ords =>
         Source.fromGraph(
-          FlowGraph.create() { implicit b =>
-          import FlowGraph.Implicits._
+          GraphDSL.create() { implicit b =>
+          import GraphDSL.Implicits._
           val groupSource = ords.map { order =>
             innerSource(order, index, lenghtThreshold, minLenght, log)
               .map(list => list.headOption.fold(Map[String, List[Result]]())(head ⇒ Map(head.groupKey -> list)))
@@ -104,8 +104,8 @@ package object commands {
         .mapConcat(_.values.toList)
 
     private def cuttingFlow(lenghtThreshold: Int, minLenght: Int, log: akka.event.LoggingAdapter) =
-      FlowGraph.create() { implicit b =>
-        import FlowGraph.Implicits._
+      GraphDSL.create() { implicit b =>
+        import GraphDSL.Implicits._
         val balancer = b.add(Balance[List[Result]](parallelism))
         val merge = b.add(Merge[List[Combination]](parallelism))
         (0 until parallelism).foreach { _ => balancer ~> cutting(lenghtThreshold, minLenght, log) ~> merge }

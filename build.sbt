@@ -10,7 +10,7 @@ name := "planner"
 version := "0.0.2-snapshot"
 
 scalaVersion := "2.11.7"
-val Akka = "2.4.0"
+val Akka = "2.4.1"
 
 parallelExecution := false
 parallelExecution in Test := false
@@ -59,7 +59,7 @@ libraryDependencies ++= Seq(
   "io.spray"            %%  "spray-json"              %   "1.3.2",
   "org.scala-sbt"       %   "completion"              %   "0.13.9",
   "info.folone"         %%  "poi-scala"               %   "0.15",
-  "com.typesafe.akka"   %%  "akka-stream-experimental"%   "2.0-M1",
+  "com.typesafe.akka"   %%  "akka-stream-experimental"%   "2.0",
   "com.typesafe.akka"   %%  "akka-slf4j"               %   Akka,
   "ch.qos.logback"      %   "logback-classic"          %   "1.1.2"
 )
