@@ -35,7 +35,7 @@ useJGit
 enablePlugins(GitVersioning)
 enablePlugins(JavaAppPackaging)
 
-val AkkaStreams = "2.0"
+val AkkaStreams = "2.0.1"
 mainClass in Compile := Some("com.izmeron.Application")
 
 val localMvnRepo = "/Volumes/Data/dev_build_tools/apache-maven-3.1.1/repository"
@@ -61,7 +61,7 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka"   %%  "akka-stream-experimental" %   AkkaStreams,
   "com.typesafe.akka"   %%"akka-http-core-experimental"%   AkkaStreams,
   "com.typesafe.akka"   %% "akka-http-experimental"    %   AkkaStreams,
-  "com.typesafe.akka"   %%  "akka-slf4j"               %   "2.4.0",
+  "com.typesafe.akka"   %%  "akka-slf4j"               %   "2.4.1",
   "ch.qos.logback"      %   "logback-classic"          %   "1.1.2"
 )
 
@@ -99,6 +99,8 @@ repository in bintray := "snapshots" //"releases"
 publishMavenStyle := true
 //publishTo := Some(Resolver.file("file",  new File(localMvnRepo)))
 
+cancelable in Global := true
+
 //sbt createHeaders
 headers := Map(
   "scala" -> (
@@ -120,6 +122,7 @@ headers := Map(
       |""".stripMargin
     )
 )
+
 
 //create/update for Compile and Test configurations, add the following settings to your build
 inConfig(Compile)(compileInputs.in(compile) <<= compileInputs.in(compile).dependsOn(createHeaders.in(compile)))
