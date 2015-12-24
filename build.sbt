@@ -59,7 +59,7 @@ libraryDependencies ++= Seq(
   "io.spray"            %%  "spray-json"              %   "1.3.2",
   "org.scala-sbt"       %   "completion"              %   "0.13.9",
   "info.folone"         %%  "poi-scala"               %   "0.15",
-  "com.typesafe.akka"   %%  "akka-stream-experimental"%   "2.0",
+  "com.typesafe.akka"   %%  "akka-stream-experimental"%   "2.0.1",
   "com.typesafe.akka"   %%  "akka-slf4j"               %   Akka,
   "ch.qos.logback"      %   "logback-classic"          %   "1.1.2"
 )
