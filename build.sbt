@@ -35,7 +35,7 @@ useJGit
 enablePlugins(GitVersioning)
 enablePlugins(JavaAppPackaging)
 
-val AkkaStreams = "2.0.1"
+val AkkaStreams = "2.4.2-RC1"
 mainClass in Compile := Some("com.izmeron.Application")
 
 val localMvnRepo = "/Volumes/Data/dev_build_tools/apache-maven-3.1.1/repository"
@@ -58,9 +58,9 @@ resolvers ++= Seq(
 libraryDependencies ++= Seq(
   "io.spray"            %%  "spray-json"               %   "1.3.2",
   "info.folone"         %%  "poi-scala"                %   "0.15",
-  "com.typesafe.akka"   %%  "akka-stream-experimental" %   AkkaStreams,
-  "com.typesafe.akka"   %%"akka-http-core-experimental"%   AkkaStreams,
-  "com.typesafe.akka"   %% "akka-http-experimental"    %   AkkaStreams,
+  "com.typesafe.akka"   %%  "akka-stream"              %   AkkaStreams,
+  "com.typesafe.akka"   %%  "akka-http-core"           %   AkkaStreams,
+  "com.typesafe.akka"   %%  "akka-http-experimental"   %   AkkaStreams,
   "com.typesafe.akka"   %%  "akka-slf4j"               %   "2.4.1",
   "ch.qos.logback"      %   "logback-classic"          %   "1.1.2"
 )
