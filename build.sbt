@@ -9,8 +9,8 @@ name := "planner"
 
 version := "0.0.2-snapshot"
 
-scalaVersion := "2.11.7"
-val Akka = "2.4.1"
+scalaVersion := "2.11.8"
+val Akka = "2.4.4"
 
 parallelExecution := false
 parallelExecution in Test := false
@@ -59,9 +59,9 @@ libraryDependencies ++= Seq(
   "io.spray"            %%  "spray-json"              %   "1.3.2",
   "org.scala-sbt"       %   "completion"              %   "0.13.9",
   "info.folone"         %%  "poi-scala"               %   "0.15",
-  "com.typesafe.akka"   %%  "akka-stream-experimental"%   "2.0.1",
-  "com.typesafe.akka"   %%  "akka-slf4j"               %   Akka,
-  "ch.qos.logback"      %   "logback-classic"          %   "1.1.2"
+  "com.typesafe.akka"   %%  "akka-stream"             %   Akka,
+  "com.typesafe.akka"   %%  "akka-slf4j"              %   Akka,
+  "ch.qos.logback"      %   "logback-classic"         %   "1.1.2"
 )
 
 libraryDependencies ++= Seq(
@@ -69,7 +69,7 @@ libraryDependencies ++= Seq(
   "org.scalatest"     %%  "scalatest"         %   "2.2.5"   % "test",
   "org.scalacheck"    %%  "scalacheck"        %   "1.12.4"  % "test",
   "com.typesafe.akka" %%  "akka-testkit"      %   Akka      % "test",
-  "org.mockito"       %  "mockito-core"      %   "1.10.19"
+  "org.mockito"       %   "mockito-core"      %   "1.10.19"
 )
 
 scalacOptions ++= Seq(
@@ -125,6 +125,9 @@ headers := Map(
 //create/update for Compile and Test configurations, add the following settings to your build
 inConfig(Compile)(compileInputs.in(compile) <<= compileInputs.in(compile).dependsOn(createHeaders.in(compile)))
 inConfig(Test)(compileInputs.in(compile) <<= compileInputs.in(compile).dependsOn(createHeaders.in(compile)))
+
+//To create a staging version of your package call
+//sbt stage
 
 //bintray:: tab
 //bintray::publish

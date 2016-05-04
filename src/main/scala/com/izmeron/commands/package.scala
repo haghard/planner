@@ -133,7 +133,7 @@ package object commands {
      * |csv_line0 |---|distribute |--+                                          +- |cuttingStock|----+
      * +----------+   +-----------+  |  Fan-in stage                            |  +------------+    |
      * +----------+   +-----------+  | +------+  +-----------------+  +-------+ |  +------------+    |   +-----+   +----------+
-     * |csv_line1 |---|distribute |----|Merge |--|flatMapConcat    |--|Balance|----|cuttingStock |-------|Merge|---|Sink actor|
+     * |csv_line1 |---|distribute |----|Merge |--|flatMapConcat    |--|Balance|----|cuttingStock|--------|Merge|---|Sink actor|
      * +----------+   +-----------+  | +------+  +-----------------+  +-------+ |  +------------+    |   +-----+   +----------+
      *                               |                                          |  +------------+    |
      * +----------+   +-----------+  |                                          +--|cuttingStock|----+
