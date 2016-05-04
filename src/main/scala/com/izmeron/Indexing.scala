@@ -16,8 +16,7 @@ package com.izmeron
 
 import java.io.FileInputStream
 import akka.actor.ActorSystem
-import akka.stream.io.Framing
-import akka.stream.scaladsl.StreamConverters
+import akka.stream.scaladsl.{ Framing, StreamConverters }
 import akka.util.ByteString
 import akka.stream.{ ActorMaterializerSettings, ActorMaterializer, Supervision, ActorAttributes }
 import com.typesafe.config.Config
