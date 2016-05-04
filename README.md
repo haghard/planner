@@ -10,7 +10,7 @@ Computation graph
 File           Parallel stage                                         Parallel stage
 +----------+   +-----------+                                          +------------+
 |csv_line0 |---|distribute |--+                                  +----|cuttingStock|----+
-+----------+   +-----------+  |  Fan-in stage  Back pres prim    |    +------------+    |
++----------+   +-----------+  |  Fan-in stage backpressure prim  |    +------------+    |
 +----------+   +-----------+  |  +----------+  +-------------+   |    +------------+    |  +------------+   +-------+
 |csv_line1 |---|distribute |-----|foldMonoid|--|bounded queue|--------|cuttingStock|-------|monoidMapper|---|convert|
 +----------+   +-----------+  |  +----------+  +-------------+   |    +------------+    |  +------------+   +-------+
