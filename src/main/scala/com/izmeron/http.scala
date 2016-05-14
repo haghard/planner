@@ -24,7 +24,7 @@ import akka.stream.actor._
 import akka.stream.scaladsl._
 import akka.util.ByteString
 import akka.actor.{ ActorLogging, Props, ActorSystem }
-import com.izmeron.out.{ JsonOutputModule, OutputWriter }
+import com.izmeron.modules.{ Emitter, JsonModule }
 import akka.stream.actor.ActorSubscriberMessage.{ OnError, OnComplete, OnNext }
 
 import scala.annotation.tailrec
@@ -87,7 +87,7 @@ object http {
 
     //http POST http://127.0.0.1:8001/orders < ./csv/metal2pipes2.csv Accept:application/json --stream
     //http POST http://127.0.0.1:8001/orders < ./csv/metal2pipes3.csv Accept:application/json --stream
-    def apply(port: Int, lenghtThreshold: Int, minLenght: Int, index: mutable.Map[String, RawResult])(implicit writer: OutputWriter[JsonOutputModule],
+    def apply(port: Int, lenghtThreshold: Int, minLenght: Int, index: mutable.Map[String, RawResult])(implicit emitter: Emitter[JsonModule],
                                                                                                       ctx: scala.concurrent.ExecutionContext, sys: ActorSystem, mat: ActorMaterializer): Future[ServerBinding] = {
       val route =
         path("version") {
@@ -101,11 +101,9 @@ object http {
             extractRequest { req ⇒
               complete {
                 val MaxBufferSize = mat.settings.maxInputBufferSize
-                val streamer = sys.actorOf(Props(classOf[ResponseStreamer], lenghtThreshold, MaxBufferSize, writer).withDispatcher("akka.planner"))
-                val sub = ActorSubscriber[List[Combination]](streamer)
-                val sink = Sink.fromSubscriber[List[Combination]](sub)
-                val pub = ActorPublisher[ByteString](streamer)
-                val source = Source.fromPublisher[ByteString](pub)
+                val streamer = sys.actorOf(Props(classOf[ResponseStreamer], lenghtThreshold, MaxBufferSize, emitter).withDispatcher("akka.planner"))
+                val sink = Sink.fromSubscriber[List[Combination]](ActorSubscriber[List[Combination]](streamer))
+                val source = Source.fromPublisher[ByteString](ActorPublisher[ByteString](streamer))
                 ((plannerSource(req, index, lenghtThreshold, minLenght, sys.log) via cuttingGraph(lenghtThreshold, minLenght, sys.log))
                   runWith sink)
                 HttpResponse(entity = HttpEntity.Chunked.fromData(ContentTypes.`application/json`, source))
@@ -118,7 +116,7 @@ object http {
     }
   }
 
-  class ResponseStreamer(lenghtThreshold: Int, MaxBufferSize: Int, writer: OutputWriter[JsonOutputModule])
+  class ResponseStreamer(lenghtThreshold: Int, MaxBufferSize: Int, emitter: Emitter[JsonModule])
       extends ActorSubscriber with ActorPublisher[ByteString] with ActorLogging {
     private val queue = mutable.Queue[ByteString]()
     private var read = false
@@ -145,7 +143,7 @@ object http {
     override def receive: Receive = {
       case OnNext(cmbs: List[Combination]) ⇒
         //log.info(s"Queue:${buffer.size} Demand:$totalDemand")
-        val line = writer.convert(writer monoidMapper (lenghtThreshold, cmbs))
+        val line = emitter.convert(emitter monoidMapper (lenghtThreshold, cmbs))
         queue += ByteString(line)
         if (totalDemand > 0)
           loop(totalDemand)
