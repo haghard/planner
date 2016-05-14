@@ -19,7 +19,7 @@ import akka.stream.{SourceShape, FlowShape}
 import akka.stream.actor.ActorSubscriberMessage.{OnComplete, OnNext}
 import akka.stream.actor.{OneByOneRequestStrategy, ActorSubscriber}
 import akka.stream.scaladsl._
-import com.izmeron.out.{OutputWriter, OutputModule}
+import com.izmeron.out.{Emitter, Module}
 
 import scala.collection.mutable
 import scala.concurrent.{Await, Future}
@@ -112,13 +112,13 @@ package object commands {
         FlowShape(balancer.in, merge.out)
       }
 
-    def apply[T <: OutputModule](path: String, outputDir: String, outFormat: String, minLenght: Int, lenghtThreshold: Int)
-                                (implicit writer: OutputWriter[T]) =
-      new Plan[T](path, outputDir, outFormat, minLenght, lenghtThreshold, writer)
+    def apply[T <: Module](path: String, outputDir: String, outFormat: String, minLenght: Int, lenghtThreshold: Int)
+                          (implicit emitter: Emitter[T]) =
+      new Plan[T](path, outputDir, outFormat, minLenght, lenghtThreshold, emitter)
   }
 
-  final class Plan[T <: OutputModule](override val indexPath: String, outputDir: String, outFormat: String, override val minLenght: Int,
-                                      override val lenghtThreshold: Int, writer: OutputWriter[T]) extends CliCommand with Indexing {
+  final class Plan[T <: Module](override val indexPath: String, outputDir: String, outFormat: String, override val minLenght: Int,
+                                override val lenghtThreshold: Int, writer: Emitter[T]) extends CliCommand with Indexing {
     import Plan._
     import akka.pattern.ask
     import scala.concurrent.duration._
@@ -153,8 +153,8 @@ package object commands {
         }, 365 seconds)
   }
 
-  class ResultAggregator[T <: OutputModule](lenghtThreshold: Int, outDir: String, outFormat:String, writer: OutputWriter[T]) extends ActorSubscriber {
-    var acc = writer.Zero
+  class ResultAggregator[T <: Module](lenghtThreshold: Int, outDir: String, outFormat: String, emitter: Emitter[T]) extends ActorSubscriber {
+    var acc = emitter.Zero
     var requestor: Option[ActorRef] = None
     val message = "The result has been written in the file"
     val exp = s"$message(.+)"
@@ -163,14 +163,14 @@ package object commands {
 
     override def receive: Receive = {
       case OnNext(cmbs: List[Combination]) =>
-        acc = writer.monoid.append(acc, writer.monoidMapper(lenghtThreshold, cmbs))
+        acc = emitter.monoid.append(acc, emitter.monoidMapper(lenghtThreshold, cmbs))
 
       case OnComplete =>
         val path = s"plan_${System.currentTimeMillis}.$outFormat"
         val file = (message + path).replaceAll(exp, s"${Console.RED}$$1${Console.RESET}")
         println(s"$message: $file")
-        val result = writer convert acc
-        writer.write(result, s"$outDir/$path").unsafePerformIO()
+        val result = emitter convert acc
+        emitter.write(result, s"$outDir/$path").unsafePerformIO()
         println(s"The latency: ${Ansi.red((System.currentTimeMillis - start).toString)} mills")
         requestor.foreach(_ ! 'Ok)
         context.system.stop(self)

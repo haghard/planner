@@ -22,24 +22,24 @@ package object out {
   import java.io.{ PrintWriter, File }
 
 
-  trait OutputModule {
+  trait Module {
     type From
     type To
   }
 
-  trait JsonOutputModule extends OutputModule {
+  trait JsonModule extends Module {
     type From = spray.json.JsObject
     type To = String
   }
 
-  trait ExcelOutputModule extends OutputModule {
+  trait ExcelModule extends Module {
     type From = Set[info.folone.scala.poi.Row]
     type To = info.folone.scala.poi.Workbook
   }
 
 
   @implicitNotFound(msg = "Cannot find OutputWriter type class for ${T}")
-  trait OutputWriter[T <: OutputModule] {
+  trait Emitter[T <: Module] {
     def empty: T#To
     def write(v: T#To, outputFile: String): IO[Unit]
     def convert(v: T#From): T#To
@@ -49,17 +49,17 @@ package object out {
   }
 
 
-  object OutputWriter {
+  object Emitter {
     import spray.json.{ JsArray, JsNumber, JsString, _ }
 
-    def apply[T <: OutputModule](implicit writer: OutputWriter[T]): OutputWriter[T] = writer
+    def apply[T <: Module](implicit writer: Emitter[T]): Emitter[T] = writer
 
-    implicit val json = new OutputWriter[JsonOutputModule] {
+    implicit val json = new Emitter[JsonModule] {
       private val enc = "UTF-8"
 
       override val Zero = JsObject("uri" -> JsString("/orders"), "body" -> JsArray())
 
-      override val monoid = new scalaz.Monoid[JsonOutputModule#From] {
+      override val monoid = new scalaz.Monoid[JsonModule#From] {
         override def zero = Zero
         override def append(f1: JsObject, f2: ⇒ JsObject): JsObject = {
           (f1, f2) match {
@@ -76,7 +76,7 @@ package object out {
             "lenght" -> JsNumber(s.lenght), "quantity" -> JsNumber(s.quantity))
       }
 
-      override def monoidMapper: (Int, List[Combination]) ⇒ JsonOutputModule#From =
+      override def monoidMapper: (Int, List[Combination]) ⇒ JsonModule#From =
         (threshold, combinations) ⇒ {
           val init = JsObject("group" -> JsString(combinations.head.groupKey), "body" -> JsArray())
           combinations./:(init) { (acc, c) ⇒
@@ -91,31 +91,31 @@ package object out {
           }
         }
 
-      override def empty: JsonOutputModule#To = JsObject().prettyPrint
-      override def convert(v: JsonOutputModule#From) = v.prettyPrint
+      override def empty: JsonModule#To = JsObject().prettyPrint
+      override def convert(v: JsonModule#From) = v.prettyPrint
 
-      override def write(v: JsonOutputModule#To, outputFile: String): IO[Unit] = {
+      override def write(v: JsonModule#To, outputFile: String): IO[Unit] = {
         val out = new PrintWriter(new File(outputFile), enc)
         IO { out.print(v.asInstanceOf[String]) }.ensuring(IO { out.close() })
       }
     }
 
     import info.folone.scala.poi._
-    implicit val excel = new OutputWriter[ExcelOutputModule] {
+    implicit val excel = new Emitter[ExcelModule] {
       import java.util.concurrent.atomic.AtomicInteger
       private val counter = new AtomicInteger(0)
 
       override val Zero: Set[Row] = Set.empty[Row]
 
-      override val monoid = new scalaz.Monoid[ExcelOutputModule#From] {
+      override val monoid = new scalaz.Monoid[ExcelModule#From] {
         override val zero = Zero
         override def append(f1: Set[Row], f2: ⇒ Set[Row]): Set[Row] = f1 ++ f2
       }
 
-      override def empty: ExcelOutputModule#To =
+      override def empty: ExcelModule#To =
         Workbook(Set(Sheet("plan") { Set(Row(0) { Set(StringCell(1, "")) }) }))
 
-      override def monoidMapper: (Int, List[Combination]) ⇒ ExcelOutputModule#From =
+      override def monoidMapper: (Int, List[Combination]) ⇒ ExcelModule#From =
         (threshold, combinations) ⇒ {
           val header = Set(Row(counter.incrementAndGet())(Set(StringCell(1, s"${combinations.head.groupKey} Макс длинна: $threshold"))))
           combinations./:(header) { (acc, c) ⇒
@@ -130,9 +130,9 @@ package object out {
           }
         }
 
-      override def convert(v: ExcelOutputModule#From) = Workbook(Set(info.folone.scala.poi.Sheet("plan")(v)))
+      override def convert(v: ExcelModule#From) = Workbook(Set(info.folone.scala.poi.Sheet("plan")(v)))
 
-      override def write(v: ExcelOutputModule#To, outputFile: String): IO[Unit] = {
+      override def write(v: ExcelModule#To, outputFile: String): IO[Unit] = {
         v.safeToFile(outputFile).fold(ex ⇒ throw ex, identity)
       }
     }

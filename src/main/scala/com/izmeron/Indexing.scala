@@ -25,7 +25,7 @@ import scala.concurrent.Future
 
 trait Indexing {
 
-  implicit val system: ActorSystem = ActorSystem("System", Application.cfg)
+  implicit val system: ActorSystem = ActorSystem("planner", Application.cfg)
   val Settings = ActorMaterializerSettings(system)
     .withInputBuffer(initialSize = 64, maxSize = 64)
     .withDispatcher("akka.planner")

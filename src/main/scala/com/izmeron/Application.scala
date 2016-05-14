@@ -19,7 +19,7 @@ import java.io.File
 import com.typesafe.config.ConfigFactory
 import sbt.complete.Parser
 import sbt.complete.DefaultParsers._
-import com.izmeron.out.{ ExcelOutputModule, JsonOutputModule }
+import com.izmeron.out.{ ExcelModule, JsonModule }
 import com.izmeron.commands.{ Exit, Plan, StaticCheck, CliCommand }
 
 import scala.annotation.tailrec
@@ -83,8 +83,8 @@ object Application extends App {
     val plan = (token("plan" ~ Space) ~> pathLineParser ~ (token("--out" ~ Space) ~> (outFormatJ | outFormatE))).map { args ⇒
       val path = args._1.trim
       val format = args._2.trim
-      if (format == outFormatJ) Plan[JsonOutputModule](path, outputDir, format, minLenght, lenghtThreshold)
-      else Plan[ExcelOutputModule](path, outputDir, format, minLenght, lenghtThreshold)
+      if (format == outFormatJ) Plan[JsonModule](path, outputDir, format, minLenght, lenghtThreshold)
+      else Plan[ExcelModule](path, outputDir, format, minLenght, lenghtThreshold)
     }
     exit | plan | check
   }
