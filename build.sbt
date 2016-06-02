@@ -9,7 +9,7 @@ name := "planner"
 
 version := "0.0.2-snapshot"
 
-scalaVersion := "2.11.7"
+scalaVersion := "2.11.8"
 
 parallelExecution := false
 parallelExecution in Test := false
@@ -35,7 +35,7 @@ useJGit
 enablePlugins(GitVersioning)
 enablePlugins(JavaAppPackaging)
 
-val Akka = "2.4.4"
+val Akka = "2.4.6"
 mainClass in Compile := Some("com.izmeron.Application")
 
 val localMvnRepo = "/Volumes/Data/dev_build_tools/apache-maven-3.1.1/repository"
