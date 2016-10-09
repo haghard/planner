@@ -10,7 +10,7 @@ name := "planner"
 version := "0.0.2-snapshot"
 
 scalaVersion := "2.11.8"
-val Akka = "2.4.4"
+val Akka = "2.4.11"
 
 parallelExecution := false
 parallelExecution in Test := false
@@ -29,7 +29,7 @@ scalacOptions ++= Seq(
   "-language:postfixOps",
   "-language:reflectiveCalls",
   "-Yno-adapted-args",
-  "-target:jvm-1.7"
+  "-target:jvm-1.8"
 )
 
 useJGit
@@ -61,6 +61,7 @@ libraryDependencies ++= Seq(
   "info.folone"         %%  "poi-scala"               %   "0.15",
   "com.typesafe.akka"   %%  "akka-stream"             %   Akka,
   "com.typesafe.akka"   %%  "akka-slf4j"              %   Akka,
+  "com.github.mpilquist" %%   "simulacrum"            % "0.8.0",
   "ch.qos.logback"      %   "logback-classic"         %   "1.1.2"
 )
 
@@ -121,6 +122,9 @@ headers := Map(
       |""".stripMargin
     )
 )
+
+addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.8.0")
+addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full)
 
 //create/update for Compile and Test configurations, add the following settings to your build
 inConfig(Compile)(compileInputs.in(compile) <<= compileInputs.in(compile).dependsOn(createHeaders.in(compile)))

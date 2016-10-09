@@ -14,10 +14,9 @@
 
 package com.izmeron
 
+import simulacrum.typeclass
 
 package object out {
-
-  import scala.annotation.implicitNotFound
   import scalaz.effect.IO
   import java.io.{ PrintWriter, File }
 
@@ -37,9 +36,7 @@ package object out {
     type To = info.folone.scala.poi.Workbook
   }
 
-
-  @implicitNotFound(msg = "Cannot find OutputWriter type class for ${T}")
-  trait Emitter[T <: Module] {
+  @typeclass trait Emitter[T <: Module] {
     def empty: T#To
     def write(v: T#To, outputFile: String): IO[Unit]
     def convert(v: T#From): T#To
@@ -52,9 +49,7 @@ package object out {
   object Emitter {
     import spray.json.{ JsArray, JsNumber, JsString, _ }
 
-    def apply[T <: Module](implicit writer: Emitter[T]): Emitter[T] = writer
-
-    implicit val json = new Emitter[JsonModule] {
+    implicit def json = new Emitter[JsonModule] {
       private val enc = "UTF-8"
 
       override val Zero = JsObject("uri" -> JsString("/orders"), "body" -> JsArray())
@@ -100,8 +95,8 @@ package object out {
       }
     }
 
-    import info.folone.scala.poi._
-    implicit val excel = new Emitter[ExcelModule] {
+    implicit def excel = new Emitter[ExcelModule] {
+      import info.folone.scala.poi._
       import java.util.concurrent.atomic.AtomicInteger
       private val counter = new AtomicInteger(0)
 

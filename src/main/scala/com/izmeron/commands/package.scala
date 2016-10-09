@@ -112,9 +112,8 @@ package object commands {
         FlowShape(balancer.in, merge.out)
       }
 
-    def apply[T <: Module](path: String, outputDir: String, outFormat: String, minLenght: Int, lenghtThreshold: Int)
-                          (implicit emitter: Emitter[T]) =
-      new Plan[T](path, outputDir, outFormat, minLenght, lenghtThreshold, emitter)
+    def apply[T <: Module: Emitter](path: String, outputDir: String, outFormat: String, minLenght: Int, lenghtThreshold: Int) =
+      new Plan[T](path, outputDir, outFormat, minLenght, lenghtThreshold, Emitter[T])
   }
 
   final class Plan[T <: Module](override val indexPath: String, outputDir: String, outFormat: String, override val minLenght: Int,
