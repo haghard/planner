@@ -2,6 +2,12 @@ Planner for cutting stoke problem
 ===================
 
 
+How to build
+===================
+
+`sbt stage`
+
+
 Computation graph
 ===================
 
@@ -26,5 +32,5 @@ Httpie
 
 ```scala
 
-http POST http://127.0.0.1:8001/orders < ./csv/metal2pipes3.csv Accept:application/json --stream
-```
+http POST http://127.0.0.1:8001/orders < ./csv/metal2pipes3.csv Accept:application/json Content-Type text/csv --stream
+

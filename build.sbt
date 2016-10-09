@@ -28,14 +28,14 @@ scalacOptions ++= Seq(
   "-language:postfixOps",
   "-language:reflectiveCalls",
   "-Yno-adapted-args",
-  "-target:jvm-1.7"
+  "-target:jvm-1.8"
 )
 
 useJGit
 enablePlugins(GitVersioning)
 enablePlugins(JavaAppPackaging)
 
-val Akka = "2.4.6"
+val Akka = "2.4.11"
 mainClass in Compile := Some("com.izmeron.Application")
 
 val localMvnRepo = "/Volumes/Data/dev_build_tools/apache-maven-3.1.1/repository"

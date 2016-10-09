@@ -32,7 +32,7 @@ trait Indexing {
   def httpPort: Int
   def cfg: Config
 
-  implicit lazy val system: ActorSystem = ActorSystem("Sys", cfg)
+  implicit lazy val system: ActorSystem = ActorSystem("System", cfg)
 
   lazy val Settings = ActorMaterializerSettings(system)
     .withInputBuffer(initialSize = 128, maxSize = 256)

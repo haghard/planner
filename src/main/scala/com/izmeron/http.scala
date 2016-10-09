@@ -56,8 +56,8 @@ object http {
     private def cutting(lenghtThreshold: Int, minLenght: Int, log: akka.event.LoggingAdapter) =
       Flow[List[Result]].buffer(1, OverflowStrategy.backpressure).map { list ⇒ cuttingStockProblem(list, lenghtThreshold, minLenght, log) }
 
-    private def plannerSource(req: HttpRequest, index: mutable.Map[String, RawResult],
-                              lenghtThreshold: Int, minLenght: Int, log: LoggingAdapter)(implicit ctx: scala.concurrent.ExecutionContext) =
+    private def plannerSource(req: HttpRequest, index: mutable.Map[String, RawResult], lenghtThreshold: Int,
+                              minLenght: Int, log: LoggingAdapter)(implicit ctx: scala.concurrent.ExecutionContext) =
       req.entity.dataBytes.via(Framing.delimiter(sep, Int.MaxValue, true).map(parseOrder))
         .grouped(parallelism).map { ords ⇒
           Source.fromGraph(GraphDSL.create() { implicit b ⇒
@@ -120,7 +120,7 @@ object http {
       extends ActorSubscriber with ActorPublisher[ByteString] with ActorLogging {
     private val queue = mutable.Queue[ByteString]()
     private var read = false
-    val start = System.currentTimeMillis()
+    private val start = System.currentTimeMillis
     override protected val requestStrategy = new MaxInFlightRequestStrategy(MaxBufferSize) {
       override def inFlightInternally = queue.size
     }

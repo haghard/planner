@@ -217,14 +217,14 @@ package object izmeron {
     Array.copy(quantities, 0, quantities0, 0, quantities.length)
     Array.copy(blocks, 0, blocks0, 0, blocks.length)
 
-    @tailrec def fetch(problem: CuttingStockProblem, result: List[Combination],
-                       error: Boolean): List[Combination] = {
+    @tailrec def fetch(problem: CuttingStockProblem, result: List[Combination], error: Boolean): List[Combination] = {
       if (problem.hasMoreCombinations && !error) {
         var wasError = false
         var sheets: List[Sheet] = List.empty
         val map: JMap[Integer, Integer] = Try(problem.nextBatch)
           .getOrElse {
-            wasError = true; new JHashMap[Integer, Integer](1)
+            wasError = true
+            new JHashMap[Integer, Integer](1)
           }
         val iter = map.entrySet.iterator
         var sum = 0
