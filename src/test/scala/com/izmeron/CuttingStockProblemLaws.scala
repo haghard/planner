@@ -38,7 +38,8 @@ object CuttingStockProblemLaws extends Properties("CuttingStockProblemLaws") {
     })
 
   property("cutting-stock-problem") = forAll(
-    Gen.containerOfN[List, Result](Size,
+    Gen.containerOfN[List, Result](
+      Size,
       for {
         k ← Gen.alphaUpperChar
         d ← Gen.alphaUpperChar

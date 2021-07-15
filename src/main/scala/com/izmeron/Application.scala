@@ -17,13 +17,14 @@ package com.izmeron
 import java.io.File
 
 import com.typesafe.config.ConfigFactory
-import sbt.complete.Parser
-import sbt.complete.DefaultParsers._
+import sbt.internal.util.complete.Parser
+import sbt.internal.util.complete.DefaultParsers._
 import com.izmeron.out.{ ExcelModule, JsonModule }
 import com.izmeron.commands.{ Exit, Plan, StaticCheck, CliCommand }
 
 import scala.annotation.tailrec
 
+//runMain com.izmeron.Application
 object Application extends App {
   val outFormatJ = "json"
   val outFormatE = "excel"
@@ -40,7 +41,7 @@ object Application extends App {
   parseLine(args.mkString(" "), cliParser(lenghtThreshold, minLenght, outputDir)).fold(runCli(lenghtThreshold, minLenght, outputDir)) { _.start() }
 
   private def readLine[U](parser: Parser[U], prompt: String = "> ", mask: Option[Char] = None): Option[U] = {
-    val reader = new sbt.FullReader(None, parser)
+    val reader = new sbt.internal.util.FullReader(None, parser)
     reader.readLine(prompt, mask) flatMap { line ⇒
       parseLine(line, parser)
     }

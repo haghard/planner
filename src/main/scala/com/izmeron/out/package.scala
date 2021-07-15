@@ -20,7 +20,6 @@ package object out {
   import scalaz.effect.IO
   import java.io.{ PrintWriter, File }
 
-
   trait Module {
     type From
     type To
@@ -45,7 +44,6 @@ package object out {
     def Zero: T#From
   }
 
-
   object Emitter {
     import spray.json.{ JsArray, JsNumber, JsString, _ }
 
@@ -59,7 +57,8 @@ package object out {
         override def append(f1: JsObject, f2: ⇒ JsObject): JsObject = {
           (f1, f2) match {
             case (f1: JsObject, f2: JsValue) ⇒
-              JsObject("uri" -> f1.fields("uri").asInstanceOf[JsString],
+              JsObject(
+                "uri" -> f1.fields("uri").asInstanceOf[JsString],
                 "body" -> JsArray(f1.fields("body").asInstanceOf[JsArray].elements.:+(f2)))
           }
         }
@@ -67,7 +66,8 @@ package object out {
 
       private val writerSheet = new spray.json.JsonWriter[Sheet] {
         override def write(s: Sheet): JsValue =
-          JsObject("kd" -> JsString(s.kd),
+          JsObject(
+            "kd" -> JsString(s.kd),
             "lenght" -> JsNumber(s.lenght), "quantity" -> JsNumber(s.quantity))
       }
 

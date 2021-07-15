@@ -1,4 +1,4 @@
-package com.izmeron;
+package com.izmeron.knapsac;
 
 import java.util.*;
 
@@ -27,12 +27,6 @@ public class CuttingStockProblem {
   }
 
   public CuttingStockProblem(int max, int[] block, int[] quantity) throws Exception {
-    for(int i = 0; i < block.length; ++i) {
-      if(block[i] > max) {
-        throw new Exception("Invalid length");
-      }
-    }
-
     if(block.length != quantity.length) {
       throw new Exception("Invalid length");
     } else {

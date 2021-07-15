@@ -14,15 +14,15 @@
 
 package com.izmeron
 
-import akka.actor.{ActorRef, Props}
-import akka.stream.{SourceShape, FlowShape}
-import akka.stream.actor.ActorSubscriberMessage.{OnComplete, OnNext}
-import akka.stream.actor.{OneByOneRequestStrategy, ActorSubscriber}
+import akka.actor.{ ActorRef, Props }
+import akka.stream.{ SourceShape, FlowShape }
+import akka.stream.actor.ActorSubscriberMessage.{ OnComplete, OnNext }
+import akka.stream.actor.{ OneByOneRequestStrategy, ActorSubscriber }
 import akka.stream.scaladsl._
-import com.izmeron.out.{Emitter, Module}
+import com.izmeron.out.{ Emitter, Module }
 
 import scala.collection.mutable
-import scala.concurrent.{Await, Future}
+import scala.concurrent.{ Await, Future }
 
 package object commands {
 
@@ -49,16 +49,17 @@ package object commands {
   }
 
   final class StaticCheck(override val indexPath: String, override val minLenght: Int,
-                          override val lenghtThreshold: Int) extends CliCommand with Indexing  {
+      override val lenghtThreshold: Int) extends CliCommand with Indexing {
     override val log = system.log
     import StaticCheck._
     override def start() = {
-      (maxLengthCheck zip multiplicity).map { case (max, error) =>
-        if (lenghtThreshold < max) println(s"${Ansi.blueMessage(rule0)}: ${Ansi.errorMessage(s"Config value $lenghtThreshold but $max has been found")}")
-        else println(s"${Ansi.blueMessage(rule0)}: ${Ansi.blueMessage(ok)}")
+      (maxLengthCheck zip multiplicity).map {
+        case (max, error) =>
+          if (lenghtThreshold < max) println(s"${Ansi.blueMessage(rule0)}: ${Ansi.errorMessage(s"Config value $lenghtThreshold but $max has been found")}")
+          else println(s"${Ansi.blueMessage(rule0)}: ${Ansi.blueMessage(ok)}")
 
-        if (error.isEmpty) println(s"${Ansi.blueMessage(rule1)}: ${Ansi.blueMessage(ok)}")
-        else println(s"${Ansi.blueMessage(rule1)}: ${Ansi.green(error.size.toString)}: ${Ansi.errorMessage(error.mkString(separator))}")
+          if (error.isEmpty) println(s"${Ansi.blueMessage(rule1)}: ${Ansi.blueMessage(ok)}")
+          else println(s"${Ansi.blueMessage(rule1)}: ${Ansi.green(error.size.toString)}: ${Ansi.errorMessage(error.mkString(separator))}")
       }.onFailure {
         case e: Throwable =>
           log.error(s"Check rules error ${Ansi.errorMessage(e.getMessage())}")
@@ -72,8 +73,7 @@ package object commands {
     val M = implicitly[scalaz.Monoid[Map[String, List[Result]]]]
 
     def innerSource(order: Order, index: mutable.Map[String, RawResult],
-                    lenghtThreshold: Int, minLenght: Int, log: akka.event.LoggingAdapter)
-                   (implicit dispatcher: scala.concurrent.ExecutionContext) = Source.fromFuture {
+      lenghtThreshold: Int, minLenght: Int, log: akka.event.LoggingAdapter)(implicit dispatcher: scala.concurrent.ExecutionContext) = Source.fromFuture {
       Future {
         val raw = index(order.kd)
         distributeWithinGroup(lenghtThreshold, minLenght, log)(groupByOptimalNumber(order, lenghtThreshold, minLenght, log)(raw))
@@ -82,25 +82,24 @@ package object commands {
 
     private def cutting(lenghtThreshold: Int, minLenght: Int, log: akka.event.LoggingAdapter) =
       Flow[List[Result]].buffer(1, akka.stream.OverflowStrategy.backpressure)
-      .map { list => cuttingStockProblem(list, lenghtThreshold, minLenght, log) }
+        .map { list => cuttingStockProblem(list, lenghtThreshold, minLenght, log) }
 
     private def orderSource(orders: List[Order], index: mutable.Map[String, RawResult],
-                            lenghtThreshold: Int, minLenght: Int, log: akka.event.LoggingAdapter)
-                            (implicit dispatcher: scala.concurrent.ExecutionContext) =
+      lenghtThreshold: Int, minLenght: Int, log: akka.event.LoggingAdapter)(implicit dispatcher: scala.concurrent.ExecutionContext) =
       Source(orders).grouped(parallelism).map { ords =>
         Source.fromGraph(
           GraphDSL.create() { implicit b =>
-          import GraphDSL.Implicits._
-          val groupSource = ords.map { order =>
-            innerSource(order, index, lenghtThreshold, minLenght, log)
-              .map(list => list.headOption.fold(Map[String, List[Result]]())(head ⇒ Map(head.groupKey -> list)))
-          }
-          val merge = b.add(Merge[Map[String, List[Result]]](ords.size))
-          groupSource.foreach(_ ~> merge)
+            import GraphDSL.Implicits._
+            val groupSource = ords.map { order =>
+              innerSource(order, index, lenghtThreshold, minLenght, log)
+                .map(list => list.headOption.fold(Map[String, List[Result]]())(head ⇒ Map(head.groupKey -> list)))
+            }
+            val merge = b.add(Merge[Map[String, List[Result]]](ords.size))
+            groupSource.foreach(_ ~> merge)
             SourceShape(merge.out)
-        })
+          })
       }.flatMapConcat(identity)
-        .fold(M.zero)((acc,c) => M.append(acc,c))
+        .fold(M.zero)((acc, c) => M.append(acc, c))
         .mapConcat(_.values.toList)
 
     private def cuttingFlow(lenghtThreshold: Int, minLenght: Int, log: akka.event.LoggingAdapter) =
@@ -117,7 +116,7 @@ package object commands {
   }
 
   final class Plan[T <: Module](override val indexPath: String, outputDir: String, outFormat: String, override val minLenght: Int,
-                                override val lenghtThreshold: Int, writer: Emitter[T]) extends CliCommand with Indexing {
+      override val lenghtThreshold: Int, writer: Emitter[T]) extends CliCommand with Indexing {
     import Plan._
     import akka.pattern.ask
     import scala.concurrent.duration._
@@ -141,9 +140,10 @@ package object commands {
      */
     override def start() =
       Await.ready(
-        (indexedOrders.flatMap { case (orders, index) =>
-        (orderSource(orders, index, lenghtThreshold, minLenght, system.log) via cuttingFlow(lenghtThreshold, minLenght, system.log))
-          .runWith(Sink.actorSubscriber(Props(classOf[ResultAggregator[T]], lenghtThreshold, outputDir, outFormat, writer))) ? 'GetResult
+        (indexedOrders.flatMap {
+          case (orders, index) =>
+            (orderSource(orders, index, lenghtThreshold, minLenght, system.log) via cuttingFlow(lenghtThreshold, minLenght, system.log))
+              .runWith(Sink.actorSubscriber(Props(classOf[ResultAggregator[T]], lenghtThreshold, outputDir, outFormat, writer))) ? 'GetResult
         }).recoverWith {
           case e: Exception =>
             println(Ansi.red(e.getMessage))

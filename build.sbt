@@ -1,7 +1,7 @@
 import com.typesafe.sbt.SbtScalariform.ScalariformKeys
 import scalariform.formatter.preferences._
-import bintray.Keys._
-import NativePackagerKeys._
+//import bintray.Keys._
+//import NativePackagerKeys._
 
 organization := "com.izmeron"
 
@@ -9,8 +9,10 @@ name := "planner"
 
 version := "0.0.2-snapshot"
 
-scalaVersion := "2.11.8"
-val Akka = "2.4.11"
+scalaVersion := "2.12.13"
+//val Akka = "2.4.11"
+
+val Akka = "2.5.23"
 
 parallelExecution := false
 parallelExecution in Test := false
@@ -32,45 +34,52 @@ scalacOptions ++= Seq(
   "-target:jvm-1.8"
 )
 
-useJGit
-enablePlugins(GitVersioning)
-enablePlugins(JavaAppPackaging)
+//useJGit
+//enablePlugins(GitVersioning)
+//enablePlugins(JavaAppPackaging)
 
 mainClass in Compile := Some("com.izmeron.Application")
 
 val localMvnRepo = "/Volumes/Data/dev_build_tools/apache-maven-3.1.1/repository"
 
-scalariformSettings
+//scalariformSettings
 
-ScalariformKeys.preferences := ScalariformKeys.preferences.value
+import scalariform.formatter.preferences._
+
+scalariformPreferences := scalariformPreferences.value
+  .setPreference(AlignSingleLineCaseStatements, true)
+  .setPreference(DoubleIndentConstructorArguments, true)
+  .setPreference(DanglingCloseParenthesis, Preserve)
+
+/*ScalariformKeys.preferences := ScalariformKeys.preferences.value
   .setPreference(RewriteArrowSymbols, true)
   .setPreference(AlignParameters, true)
-  .setPreference(AlignSingleLineCaseStatements, true)
+  .setPreference(AlignSingleLineCaseStatements, true)*/
 
-net.virtualvoid.sbt.graph.Plugin.graphSettings
+//net.virtualvoid.sbt.graph.Plugin.graphSettings
 
 resolvers ++= Seq(
-  "Local Maven Repository" at "file:///" + localMvnRepo,
-  "maven central"          at "http://repo.maven.apache.org/maven2",
-  "jboss repo"             at "http://repository.jboss.org/nexus/content/groups/public-jboss/"
+  //"Local Maven Repository" at "file:///" + localMvnRepo,
+  "maven central" at "https://repo.maven.apache.org/maven2",
+  //"jboss repo"             at "http://repository.jboss.org/nexus/content/groups/public-jboss/"
 )
 
 libraryDependencies ++= Seq(
-  "io.spray"            %%  "spray-json"              %   "1.3.2",
-  "org.scala-sbt"       %   "completion"              %   "0.13.9",
-  "info.folone"         %%  "poi-scala"               %   "0.15",
-  "com.typesafe.akka"   %%  "akka-stream"             %   Akka,
-  "com.typesafe.akka"   %%  "akka-slf4j"              %   Akka,
-  "com.github.mpilquist" %%   "simulacrum"            % "0.8.0",
-  "ch.qos.logback"      %   "logback-classic"         %   "1.1.2"
+  "io.spray" %% "spray-json" % "1.3.2",
+  "org.scala-sbt" %% "completion" % "1.5.5",
+  "info.folone" %% "poi-scala" % "0.17",
+  "com.typesafe.akka" %% "akka-stream" % Akka,
+  "com.typesafe.akka" %% "akka-slf4j" % Akka,
+  "org.typelevel" %% "simulacrum" % "1.0.0",
+  "ch.qos.logback" % "logback-classic" % "1.1.2"
 )
 
 libraryDependencies ++= Seq(
-  "org.specs2"        %%  "specs2-core"       %   "3.2"     % "test" withSources(),
-  "org.scalatest"     %%  "scalatest"         %   "2.2.5"   % "test",
-  "org.scalacheck"    %%  "scalacheck"        %   "1.12.4"  % "test",
-  "com.typesafe.akka" %%  "akka-testkit"      %   Akka      % "test",
-  "org.mockito"       %   "mockito-core"      %   "1.10.19"
+  "org.specs2"        %%  "specs2-core"       %   "3.8.6"     % "test" withSources(),
+  "org.scalatest"     %% "scalatest" % "3.0.5" % "test",
+  "org.scalacheck"    %%  "scalacheck"        %  "1.15.4"   % "test",
+  "com.typesafe.akka" %% "akka-testkit" % Akka % "test",
+  "org.mockito" % "mockito-core" % "1.10.19"
 )
 
 scalacOptions ++= Seq(
@@ -90,19 +99,18 @@ javacOptions ++= Seq(
   "-Xlint:unchecked",
   "-Xlint:deprecation")
 
-seq(bintraySettings:_*)
+//seq(bintraySettings:_*)
 
 licenses += ("Apache-2.0", url("http://www.apache.org/licenses/"))
 
-bintrayOrganization in bintray := Some("haghard")
+//bintrayOrganization in bintray := Some("haghard")
+//repository in bintray := "snapshots" //"releases"
 
-repository in bintray := "snapshots" //"releases"
-
-publishMavenStyle := true
+//publishMavenStyle := true
 //publishTo := Some(Resolver.file("file",  new File(localMvnRepo)))
 
 //sbt createHeaders
-headers := Map(
+/*headers := Map(
   "scala" -> (
     HeaderPattern.cStyleBlockComment,
    """|/*
@@ -121,14 +129,13 @@ headers := Map(
       |
       |""".stripMargin
     )
-)
+)*/
 
-addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.8.0")
-addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full)
+addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.1" cross CrossVersion.full)
 
 //create/update for Compile and Test configurations, add the following settings to your build
-inConfig(Compile)(compileInputs.in(compile) <<= compileInputs.in(compile).dependsOn(createHeaders.in(compile)))
-inConfig(Test)(compileInputs.in(compile) <<= compileInputs.in(compile).dependsOn(createHeaders.in(compile)))
+//inConfig(Compile)(compileInputs.in(compile) <<= compileInputs.in(compile).dependsOn(createHeaders.in(compile)))
+//inConfig(Test)(compileInputs.in(compile) <<= compileInputs.in(compile).dependsOn(createHeaders.in(compile)))
 
 //To create a staging version of your package call
 //sbt stage

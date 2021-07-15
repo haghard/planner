@@ -15,6 +15,7 @@
 package com.izmeron
 
 import akka.actor.ActorSystem
+import com.izmeron.knapsac.CuttingStockProblem
 import org.scalatest.{ MustMatchers, WordSpecLike }
 
 class PlannerSpec extends akka.testkit.TestKit(ActorSystem("akka-planner")) with WordSpecLike with MustMatchers {
@@ -22,6 +23,7 @@ class PlannerSpec extends akka.testkit.TestKit(ActorSystem("akka-planner")) with
   val minLenght = 400
 
   "cuttingStockProblem" should {
+
     "scenario0" in {
       val in =
         Result("86401.095", "Сталь 20Х/120/56", 614, 1228, 2, 2, 1, 1, 0) ::
@@ -31,6 +33,12 @@ class PlannerSpec extends akka.testkit.TestKit(ActorSystem("akka-planner")) with
           Result("86602.038", "Сталь 20Х/120/56", 270, 1080, 4, 4, 1, 1, 0) :: Nil
 
       val combinations = cuttingStockProblem(in, lenghtThreshold, minLenght, system.log)
+
+      combinations.foreach { c ⇒
+        println("*******************************************************")
+        println(" sheets: " + c.sheets.mkString(",") + "rest: " + c.rest)
+      }
+
       val expectedLength = in./:(0)((acc, c) ⇒ acc + c.length * c.cQuantity)
       val sumLen = combinations.map(_.sheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).sum
       val actual = combinations.find(e ⇒ lenghtThreshold - e.rest < minLenght)
@@ -60,7 +68,8 @@ class PlannerSpec extends akka.testkit.TestKit(ActorSystem("akka-planner")) with
 
     "scenario2" in {
       val in =
-        List(Result("86501.420.009.111", "Сталь 38ХГМ/100/45", 120, 604, 5, 4, 1, 1, 0),
+        List(
+          Result("86501.420.009.111", "Сталь 38ХГМ/100/45", 120, 604, 5, 4, 1, 1, 0),
           Result("86501.420.001.900", "Сталь 38ХГМ/100/45", 200, 604, 3, 6, 1, 1, 0),
           Result("86501.420.001.900", "Сталь 38ХГМ/100/45", 200, 1200, 6, 6, 1, 1, 0),
           Result("94100.001.007.072", "Сталь 38ХГМ/100/45", 170, 684, 4, 3, 1, 1, 0),
@@ -94,7 +103,8 @@ class PlannerSpec extends akka.testkit.TestKit(ActorSystem("akka-planner")) with
 
     "scenario4" in {
       val in =
-        List(Result("94900.04.701", "Сталь 38ХГМ/260/78", 437, 1315, 3, 2, 1, 1, 0),
+        List(
+          Result("94900.04.701", "Сталь 38ХГМ/260/78", 437, 1315, 3, 2, 1, 1, 0),
           Result("94900.04.751", "Сталь 38ХГМ/260/78", 437, 874, 2, 2, 1, 1, 0),
           Result("94900.04.751", "Сталь 38ХГМ/260/78", 437, 874, 2, 2, 1, 1, 0))
 
@@ -111,7 +121,8 @@ class PlannerSpec extends akka.testkit.TestKit(ActorSystem("akka-planner")) with
 
     "scenario5" in {
       val in =
-        List(Result("94900.04.701", "Сталь 38ХГМ/260/78", 437, 874, 2, 2, 1, 1, 0),
+        List(
+          Result("94900.04.701", "Сталь 38ХГМ/260/78", 437, 874, 2, 2, 1, 1, 0),
           Result("94900.04.751", "Сталь 38ХГМ/260/78", 437, 874, 2, 2, 1, 1, 0),
           Result("94900.04.881", "Сталь 38ХГМ/260/78", 502, 1004, 2, 2, 1, 1, 0))
 
@@ -128,7 +139,8 @@ class PlannerSpec extends akka.testkit.TestKit(ActorSystem("akka-planner")) with
 
     "scenario6" in {
       val in =
-        List(Result("93900.00.01.177", "Сталь 38ХГМ/120/32", 416, 832, 2, 2, 1, 1, 0),
+        List(
+          Result("93900.00.01.177", "Сталь 38ХГМ/120/32", 416, 832, 2, 2, 1, 1, 0),
           Result("93920.00.00.022", "Сталь 38ХГМ/120/32", 504, 1008, 2, 2, 1, 1, 0), Result("86320.031", "Сталь 38ХГМ/120/32", 655, 1310, 2, 2, 1, 1, 0),
           Result("93900.00.01.178", "Сталь 38ХГМ/120/32", 429, 858, 2, 2, 1, 1, 0), Result("93930.005", "Сталь 38ХГМ/120/32", 384, 1152, 3, 3, 1, 1, 0),
           Result("93900.00.00.002", "Сталь 38ХГМ/120/32", 385, 1155, 3, 3, 1, 1, 0), Result("93920.01.00.022", "Сталь 38ХГМ/120/32", 504, 1008, 2, 2, 1, 1, 0),
@@ -158,7 +170,8 @@ class PlannerSpec extends akka.testkit.TestKit(ActorSystem("akka-planner")) with
       lenghtThreshold = 450 * 4
 
       val in =
-        List(Result("XY", "Сталь 38ХГМ-260-78", 382, 382, 1, 1, 1, 1, 0),
+        List(
+          Result("XY", "Сталь 38ХГМ-260-78", 382, 382, 1, 1, 1, 1, 0),
           Result("DT", "Сталь 38ХГМ-260-78", 417, 1251, 3, 3, 1, 1, 0), Result("EX", "Сталь 38ХГМ-260-78", 371, 371, 1, 1, 1, 1, 0),
           Result("EF", "Сталь 38ХГМ-260-78", 432, 1728, 4, 4, 1, 1, 0), Result("RD", "Сталь 38ХГМ-260-78", 368, 1104, 3, 3, 1, 1, 0),
           Result("DV", "Сталь 38ХГМ-260-78", 399, 1596, 4, 4, 1, 1, 0), Result("TU", "Сталь 38ХГМ-260-78", 404, 404, 1, 1, 1, 1, 0))
@@ -234,7 +247,8 @@ class PlannerSpec extends akka.testkit.TestKit(ActorSystem("akka-planner")) with
     "scenario-11-long-playing" in {
       lenghtThreshold = 450 * 4
 
-      val in = List(Result("NO", "Сталь 38ХГМ-260-78", 449, 1347, 3, 3, 1, 1, 0),
+      val in = List(
+        Result("NO", "Сталь 38ХГМ-260-78", 449, 1347, 3, 3, 1, 1, 0),
         Result("RT", "Сталь 38ХГМ-260-78", 385, 1540, 4, 4, 1, 1, 0), Result("KL", "Сталь 38ХГМ-260-78", 445, 445, 1, 1, 1, 1, 0),
         Result("CA", "Сталь 38ХГМ-260-78", 429, 1716, 4, 4, 1, 1, 0), Result("ZP", "Сталь 38ХГМ-260-78", 431, 431, 1, 1, 1, 1, 0),
         Result("FN", "Сталь 38ХГМ-260-78", 376, 376, 1, 1, 1, 1, 0), Result("HZ", "Сталь 38ХГМ-260-78", 433, 1732, 4, 4, 1, 1, 0),
@@ -258,22 +272,62 @@ class PlannerSpec extends akka.testkit.TestKit(ActorSystem("akka-planner")) with
     }
 
     "scenario12" in {
+      val in =
+        Result("86501.420.009.111", "Сталь 38ХГМ/100/45", 120, 480, 4, 4, 1, 1, 0) ::
+          Result("86501.420.001.900", "Сталь 38ХГМ/100/45", 200, 1200, 6, 6, 1, 1, 0) ::
+          Result("86501.420.001.903", "Сталь 38ХГМ/100/45", 200, 404, 2, 6, 1, 1, 0) ::
+          Result("94100.001.007.072", "Сталь 38ХГМ/100/45", 170, 510, 3, 3, 1, 1, 0) ::
+          Result("94100.001.007.073", "Сталь 38ХГМ/100/45", 170, 510, 3, 3, 1, 1, 0) ::
+          Result("86501.420.009.113", "Сталь 38ХГМ/100/45", 120, 724, 6, 4, 1, 1, 0) :: Nil
 
-      val in = List(Result("86501.420.009.111", "Сталь 38ХГМ/100/45", 120, 480, 4, 4, 1, 1, 0),
-        Result("86501.420.001.900", "Сталь 38ХГМ/100/45", 200, 1200, 6, 6, 1, 1, 0), Result("86501.420.001.903", "Сталь 38ХГМ/100/45", 200, 404, 2, 6, 1, 1, 0),
-        Result("94100.001.007.072", "Сталь 38ХГМ/100/45", 170, 510, 3, 3, 1, 1, 0), Result("94100.001.007.073", "Сталь 38ХГМ/100/45", 170, 510, 3, 3, 1, 1, 0),
-        Result("86501.420.009.113", "Сталь 38ХГМ/100/45", 120, 724, 6, 4, 1, 1, 0))
-
-      val expectedLength = in./:(0)((acc, c) ⇒ acc + c.length * c.cQuantity)
+      val originalLen = in./:(0) { (acc, c) ⇒
+        val innerL = c.length * c.cQuantity
+        println(s"$innerL $acc")
+        acc + innerL
+      }
+      println(s"$originalLen")
 
       val combinations = cuttingStockProblem(in, lenghtThreshold, 400, system.log)
+
+      combinations.foreach { c ⇒
+        println("*******************************************************")
+        println(" sheets: " + c.sheets.mkString(",") + "rest: " + c.rest)
+      }
+
       val sumLen = combinations.map(_.sheets./:(0)((acc, c) ⇒ acc + c.lenght * c.quantity)).sum
       val actual = combinations.find(e ⇒ lenghtThreshold - e.rest < minLenght)
       val balance = combinations.map(_.rest).sum
 
-      expectedLength === sumLen
+      originalLen === sumLen
       actual.isDefined === false
       (sumLen + balance) === combinations.size * lenghtThreshold
     }
+
+    /*"scenario13" in {
+      val blocks = Array(700, 500, 250, 380)
+      val quantities = Array(4, 3, 6, 5)
+      val maxSize = 2000
+      import java.util.{ Map ⇒ JMap, HashMap ⇒ JHashMap }
+      import scala.collection.JavaConversions._
+      var map: JMap[Integer, Integer] = new JHashMap
+      var s = 0
+      var c = 0
+      val csp = new CuttingStockProblem(maxSize, blocks, quantities)
+      while (csp.hasMoreCombinations) {
+        map = csp.nextBatch
+        s = 0
+        c = 0
+        for (entry ← map.entrySet) {
+          val key = entry.getKey
+          val value = entry.getValue
+          println(key + "  *  " + value)
+          c = key * value
+          s = s + c
+        }
+        println(s"******batch: $s *******")
+      }
+
+      1 === 1
+    }*/
   }
 }
