@@ -44,8 +44,8 @@ object http {
     }
 
     private def innerSource(order: Order, index: mutable.Map[String, RawResult],
-                            lenghtThreshold: Int, minLenght: Int,
-                            log: akka.event.LoggingAdapter)(implicit ctx: scala.concurrent.ExecutionContext) = Source.fromFuture {
+      lenghtThreshold: Int, minLenght: Int,
+      log: akka.event.LoggingAdapter)(implicit ctx: scala.concurrent.ExecutionContext) = Source.fromFuture {
       Future {
         index.get(order.kd).fold(List.empty[Result]) { raw ⇒
           distributeWithinGroup(lenghtThreshold, minLenght, log)(groupByOptimalNumber(order, lenghtThreshold, minLenght, log)(raw))
@@ -57,7 +57,7 @@ object http {
       Flow[List[Result]].buffer(1, OverflowStrategy.backpressure).map { list ⇒ cuttingStockProblem(list, lenghtThreshold, minLenght, log) }
 
     private def plannerSource(req: HttpRequest, index: mutable.Map[String, RawResult], lenghtThreshold: Int,
-                              minLenght: Int, log: LoggingAdapter)(implicit ctx: scala.concurrent.ExecutionContext) =
+      minLenght: Int, log: LoggingAdapter)(implicit ctx: scala.concurrent.ExecutionContext) =
       req.entity.dataBytes.via(Framing.delimiter(sep, Int.MaxValue, true).map(parseOrder))
         .grouped(parallelism).map { ords ⇒
           Source.fromGraph(GraphDSL.create() { implicit b ⇒
@@ -87,8 +87,9 @@ object http {
 
     //http POST http://127.0.0.1:8001/orders < ./csv/metal2pipes2.csv Accept:application/json --stream
     //http POST http://127.0.0.1:8001/orders < ./csv/metal2pipes3.csv Accept:application/json --stream
-    def apply(port: Int, lenghtThreshold: Int, minLenght: Int, index: mutable.Map[String, RawResult])(implicit emitter: Emitter[JsonModule],
-                                                                                                      ctx: scala.concurrent.ExecutionContext, sys: ActorSystem, mat: ActorMaterializer): Future[ServerBinding] = {
+    def apply(port: Int, lenghtThreshold: Int, minLenght: Int, index: mutable.Map[String, RawResult])(implicit
+      emitter: Emitter[JsonModule],
+      ctx: scala.concurrent.ExecutionContext, sys: ActorSystem, mat: ActorMaterializer): Future[ServerBinding] = {
       val route =
         path("version") {
           post {
@@ -116,8 +117,8 @@ object http {
     }
   }
 
-  class ResponseStreamer(lenghtThreshold: Int, MaxBufferSize: Int, emitter: Emitter[JsonModule])
-      extends ActorSubscriber with ActorPublisher[ByteString] with ActorLogging {
+  final class ResponseStreamer(lenghtThreshold: Int, MaxBufferSize: Int, emitter: Emitter[JsonModule])
+    extends ActorSubscriber with ActorPublisher[ByteString] with ActorLogging {
     private val queue = mutable.Queue[ByteString]()
     private var read = false
     private val start = System.currentTimeMillis
@@ -128,16 +129,16 @@ object http {
     private val waitLastChunk: Receive = {
       case ActorPublisherMessage.Request(n) ⇒
         loop(n)
-        (context stop self)
+        context stop self
 
       case ActorPublisherMessage.SubscriptionTimeoutExceeded ⇒
         onComplete()
-        (context stop self)
+        context stop self
 
       case ActorPublisherMessage.Cancel ⇒
         log.debug("client has closed the connection")
         cancel()
-        (context stop self)
+        context stop self
     }
 
     override def receive: Receive = {
@@ -151,9 +152,9 @@ object http {
       case OnComplete ⇒
         flush
         onNext(ByteString(s"""latency: ${System.currentTimeMillis - start}"""))
-        if (read) (context stop self)
+        if (read) context stop self
         //log.debug(s"completed with buffer:${buffer.size}")
-        else (context become waitLastChunk)
+        else context become waitLastChunk
 
       case OnError(ex) ⇒
         log.debug(s"onError: ${ex.getMessage}")
@@ -164,12 +165,12 @@ object http {
 
       case ActorPublisherMessage.SubscriptionTimeoutExceeded ⇒
         onComplete()
-        (context stop self)
+        context stop self
 
       case ActorPublisherMessage.Cancel ⇒
         log.debug("client has closed the connection")
         cancel()
-        (context stop self)
+        context stop self
     }
 
     def flush = {

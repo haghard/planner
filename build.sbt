@@ -1,7 +1,7 @@
 import com.typesafe.sbt.SbtScalariform.ScalariformKeys
 import scalariform.formatter.preferences._
-import bintray.Keys._
-import NativePackagerKeys._
+//import bintray.Keys._
+//import NativePackagerKeys._
 
 organization := "com.izmeron"
 
@@ -9,7 +9,7 @@ name := "planner"
 
 version := "0.0.2-snapshot"
 
-scalaVersion := "2.11.8"
+scalaVersion := "2.11.12"
 
 parallelExecution := false
 parallelExecution in Test := false
@@ -31,15 +31,23 @@ scalacOptions ++= Seq(
   "-target:jvm-1.8"
 )
 
-useJGit
-enablePlugins(GitVersioning)
-enablePlugins(JavaAppPackaging)
+//useJGit
+//enablePlugins(GitVersioning)
+//enablePlugins(JavaAppPackaging)
 
 val Akka = "2.4.11"
 mainClass in Compile := Some("com.izmeron.Application")
 
 val localMvnRepo = "/Volumes/Data/dev_build_tools/apache-maven-3.1.1/repository"
 
+import scalariform.formatter.preferences._
+
+scalariformPreferences := scalariformPreferences.value
+  .setPreference(AlignSingleLineCaseStatements, true)
+  .setPreference(DoubleIndentConstructorArguments, true)
+  .setPreference(DanglingCloseParenthesis, Preserve)
+
+/*
 scalariformSettings
 
 ScalariformKeys.preferences := ScalariformKeys.preferences.value
@@ -48,16 +56,18 @@ ScalariformKeys.preferences := ScalariformKeys.preferences.value
   .setPreference(AlignSingleLineCaseStatements, true)
 
 net.virtualvoid.sbt.graph.Plugin.graphSettings
+*/
 
 resolvers ++= Seq(
-  "Local Maven Repository" at "file:///" + localMvnRepo,
-  "maven central"          at "http://repo.maven.apache.org/maven2",
-  "jboss repo"             at "http://repository.jboss.org/nexus/content/groups/public-jboss/"
+  //"Local Maven Repository" at "file:///" + localMvnRepo,
+  "maven central"          at "https://repo.maven.apache.org/maven2",
+  //"jboss repo"             at "https://repository.jboss.org/nexus/content/groups/public-jboss/"
 )
 
 libraryDependencies ++= Seq(
   "io.spray"            %%  "spray-json"               %   "1.3.2",
   "info.folone"         %%  "poi-scala"                %   "0.15",
+  "org.scalaz.stream"   %%  "scalaz-stream"            %   "0.7.2a",
   "com.typesafe.akka"   %%  "akka-stream"              %   Akka,
   "com.typesafe.akka"   %%  "akka-http-core"           %   Akka,
   "com.typesafe.akka"   %%  "akka-http-experimental"   %   Akka,
@@ -88,13 +98,15 @@ javacOptions ++= Seq(
   "-Xlint:unchecked",
   "-Xlint:deprecation")
 
-seq(bintraySettings:_*)
+
 
 licenses += ("Apache-2.0", url("http://www.apache.org/licenses/"))
 
+/*
+seq(bintraySettings:_*)
 bintrayOrganization in bintray := Some("haghard")
-
 repository in bintray := "snapshots" //"releases"
+*/
 
 publishMavenStyle := true
 //publishTo := Some(Resolver.file("file",  new File(localMvnRepo)))
@@ -102,6 +114,8 @@ publishMavenStyle := true
 cancelable in Global := true
 
 //sbt createHeaders
+/*
+
 headers := Map(
   "scala" -> (
     HeaderPattern.cStyleBlockComment,
@@ -122,11 +136,12 @@ headers := Map(
       |""".stripMargin
     )
 )
+*/
 
 
 //create/update for Compile and Test configurations, add the following settings to your build
-inConfig(Compile)(compileInputs.in(compile) <<= compileInputs.in(compile).dependsOn(createHeaders.in(compile)))
-inConfig(Test)(compileInputs.in(compile) <<= compileInputs.in(compile).dependsOn(createHeaders.in(compile)))
+//inConfig(Compile)(compileInputs.in(compile) <<= compileInputs.in(compile).dependsOn(createHeaders.in(compile)))
+//inConfig(Test)(compileInputs.in(compile) <<= compileInputs.in(compile).dependsOn(createHeaders.in(compile)))
 
 //bintray:: tab
 //bintray::publish

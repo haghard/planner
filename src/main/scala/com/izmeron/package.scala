@@ -34,19 +34,20 @@ package object izmeron {
   case class Order(kd: String, quantity: Int)
   case class Version(major: Int, minor: Int, bf: Int)
   case class Etalon(kd: String, name: String, nameMat: String, marka: String, diam: Int, len: Int, indiam: Int, qOptimal: Int, qMin: Int,
-                    lenMin: Int, numSect: Int, numPart: Int, tProfit: Int)
+      lenMin: Int, numSect: Int, numPart: Int, tProfit: Int)
 
   object Result {
     def redistribute(credit: Result, debit: Result): (Result, Result) =
-      (credit.copy(cQuantity = credit.cQuantity - 1),
+      (
+        credit.copy(cQuantity = credit.cQuantity - 1),
         debit.copy(cQuantity = debit.cQuantity + 1))
   }
 
   case class Result(kd: String, groupKey: String = "", length: Int = 0, cLength: Int = 0,
-                    cQuantity: Int = 0, optQuantity: Int = 0, multiplicity: Int = 0, minQuant: Int = 0, profit: Int = 0)
+      cQuantity: Int = 0, optQuantity: Int = 0, multiplicity: Int = 0, minQuant: Int = 0, profit: Int = 0)
 
   case class RawResult(kd: String, groupKey: String, qOptimal: Int, lenght: Int, minLenght: Int, techProfit: Int,
-                       minQuantity: Int, multiplicity: Int)
+      minQuantity: Int, multiplicity: Int)
 
   final class NamedThreadFactory(var name: String) extends ThreadFactory {
     private def namePrefix = name + "-thread"
@@ -62,7 +63,7 @@ package object izmeron {
   case class Provision(kdKey: String = "", length: Int = 0, stocks: List[Int] = Nil)
 
   private[izmeron] def cuttingStockProblem(group: List[Result], threshold: Int, minLenght: Int,
-                                           log: akka.event.LoggingAdapter): List[Combination] = {
+    log: akka.event.LoggingAdapter): List[Combination] = {
     def unit(r: Result, ind: Int): StockUnit =
       StockUnit(ind, r.kd, r.groupKey, r.length)
 
@@ -77,7 +78,8 @@ package object izmeron {
       val list = groupedMap.values.iterator.next()
       list./:(List.empty[Combination]) { (acc, c) ⇒
         var ind = 0
-        Combination(groupKey = c.groupKey,
+        Combination(
+          groupKey = c.groupKey,
           sheets = List.fill(c.cQuantity) {
             ind += 1
             Sheet(c.kd, c.length, 1)
@@ -160,8 +162,8 @@ package object izmeron {
   }
 
   private[izmeron] def collect(blocks: Array[Int], quantities: Array[Int],
-                               minLenght: Int, sheetLength: Int,
-                               log: akka.event.LoggingAdapter, items: List[Combination]): Option[List[Combination]] =
+    minLenght: Int, sheetLength: Int,
+    log: akka.event.LoggingAdapter, items: List[Combination]): Option[List[Combination]] =
     cutNext(blocks, quantities, sheetLength, log) flatMap { cmb ⇒
       val (b, q) = crossOut(cmb)
       if (q.length > 0) collect(b, q, minLenght, sheetLength, log, cmb._1 :: items)
@@ -211,7 +213,7 @@ package object izmeron {
   import com.izmeron.CuttingStockProblem
   import java.util.{ Map ⇒ JMap, HashMap ⇒ JHashMap }
   private def cutNext(blocks: Array[Int], quantities: Array[Int],
-                      sheetLength: Int, log: akka.event.LoggingAdapter): Option[(Combination, Array[Int], Array[Int])] = {
+    sheetLength: Int, log: akka.event.LoggingAdapter): Option[(Combination, Array[Int], Array[Int])] = {
     val quantities0 = Array.fill(quantities.length)(0)
     val blocks0 = Array.fill(blocks.length)(0)
     Array.copy(quantities, 0, quantities0, 0, quantities.length)

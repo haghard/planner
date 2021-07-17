@@ -59,7 +59,8 @@ package object modules {
         override def append(f1: JsObject, f2: ⇒ JsObject): JsObject = {
           (f1, f2) match {
             case (f1: JsObject, f2: JsValue) ⇒
-              JsObject("uri" -> f1.fields("uri").asInstanceOf[JsString],
+              JsObject(
+                "uri" -> f1.fields("uri").asInstanceOf[JsString],
                 "body" -> JsArray(f1.fields("body").asInstanceOf[JsArray].elements.:+(f2)))
           }
         }
@@ -67,7 +68,8 @@ package object modules {
 
       private val writerSheet = new spray.json.JsonWriter[Sheet] {
         override def write(s: Sheet): JsValue =
-          JsObject("kd" -> JsString(s.kd),
+          JsObject(
+            "kd" -> JsString(s.kd),
             "lenght" -> JsNumber(s.lenght), "quantity" -> JsNumber(s.quantity))
       }
 
@@ -80,9 +82,7 @@ package object modules {
               "body" -> JsArray(acc.fields("body").asInstanceOf[JsArray].elements.:+(JsObject(
                 "sheet" -> JsArray(c.sheets.toVector.map(writerSheet.write)),
                 "balance" -> JsNumber(c.rest),
-                "lenght" -> JsNumber(threshold - c.rest)
-              )))
-            )
+                "lenght" -> JsNumber(threshold - c.rest)))))
           }
         }
 
