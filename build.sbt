@@ -7,18 +7,20 @@ organization := "com.izmeron"
 
 name := "planner"
 
-version := "0.0.2-snapshot"
+version := "0.0.3-SNAPSHOT"
 
 scalaVersion := "2.12.13"
-//val Akka = "2.4.11"
 
 val Akka = "2.5.23"
 
 parallelExecution := false
-parallelExecution in Test := false
-logBuffered in Test := false
+Test / parallelExecution := false
+Test / logBuffered := false
 
-initialCommands in console in Test := "import org.specs2._"
+
+console / initialCommands := "import org.specs2._"
+
+Test / initialCommands := "import org.specs2._"
 
 shellPrompt := { state => System.getProperty("user.name") + "> " }
 
@@ -31,14 +33,15 @@ scalacOptions ++= Seq(
   "-language:postfixOps",
   "-language:reflectiveCalls",
   "-Yno-adapted-args",
-  "-target:jvm-1.8"
+  //"-target:jvm-1.8"
+  "-target:jvm-11"
 )
 
 //useJGit
 //enablePlugins(GitVersioning)
 //enablePlugins(JavaAppPackaging)
 
-mainClass in Compile := Some("com.izmeron.Application")
+Compile / mainClass := Some("com.izmeron.Application")
 
 val localMvnRepo = "/Volumes/Data/dev_build_tools/apache-maven-3.1.1/repository"
 
@@ -66,7 +69,12 @@ resolvers ++= Seq(
 
 libraryDependencies ++= Seq(
   "io.spray" %% "spray-json" % "1.3.2",
+
   "org.scala-sbt" %% "completion" % "1.5.5",
+
+  //https://github.com/radicalbit/NSDb/blob/ef4fbeacca0d785fb5374fcc93cc8dc0a3d14582/nsdb-cli/src/main/scala/io/radicalbit/nsdb/cli/NsdbCli.scala
+  "com.github.scopt" %% "scopt" % "3.7.1",
+
   "info.folone" %% "poi-scala" % "0.17",
   "com.typesafe.akka" %% "akka-stream" % Akka,
   "com.typesafe.akka" %% "akka-slf4j" % Akka,
@@ -75,10 +83,10 @@ libraryDependencies ++= Seq(
 )
 
 libraryDependencies ++= Seq(
-  "org.specs2"        %%  "specs2-core"       %   "3.8.6"     % "test" withSources(),
-  "org.scalatest"     %% "scalatest" % "3.0.5" % "test",
-  "org.scalacheck"    %%  "scalacheck"        %  "1.15.4"   % "test",
-  "com.typesafe.akka" %% "akka-testkit" % Akka % "test",
+  "org.specs2"        %%  "specs2-core"         %   "3.8.6"   % "test" withSources(),
+  "org.scalatest"     %% "scalatest"            %   "3.0.5"   % "test",
+  "org.scalacheck"    %%  "scalacheck"          %   "1.15.4"  % "test",
+  "com.typesafe.akka" %% "akka-testkit" % Akka  %   "test",
   "org.mockito" % "mockito-core" % "1.10.19"
 )
 

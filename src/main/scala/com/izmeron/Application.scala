@@ -67,11 +67,10 @@ object Application extends App {
         case Some(Exit) ⇒
           println(s"${Ansi.green("exit")}")
           System.exit(0)
-        case Some(cmd) ⇒ {
+        case Some(cmd) ⇒
           println(s"${Ansi.green(cmd.getClass.getSimpleName)}")
           cmd.start()
           loop()
-        }
       }
     }
     loop()
